@@ -17,9 +17,9 @@ export function LatestPost() {
   });
 
   return (
-    <div className="w-full max-w-xs">
+    <div style={{width: '100%', maxWidth: '20rem'}}>
       {latestPost ? (
-        <p className="truncate">Your most recent post: {latestPost.name}</p>
+        <p style={{overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}>Your most recent post: {latestPost.name}</p>
       ) : (
         <p>You have no posts yet.</p>
       )}
@@ -28,18 +28,18 @@ export function LatestPost() {
           e.preventDefault();
           createPost.mutate({ name });
         }}
-        className="flex flex-col gap-2"
+        style={{display: 'flex', flexDirection: 'column', gap: '0.5rem'}}
       >
         <input
           type="text"
           placeholder="Title"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          className="w-full rounded-full bg-white/10 px-4 py-2 text-white"
+          style={{width: '100%', borderRadius: '9999px', backgroundColor: 'rgba(255,255,255,0.1)', padding: '0.5rem 1rem', color: 'white', border: 'none', outline: 'none'}}
         />
         <button
           type="submit"
-          className="rounded-full bg-white/10 px-10 py-3 font-semibold transition hover:bg-white/20"
+          style={{borderRadius: '9999px', backgroundColor: 'rgba(255,255,255,0.1)', padding: '0.75rem 2.5rem', fontWeight: '600', border: 'none', color: 'white', cursor: 'pointer', transition: 'background-color 0.2s'}}
           disabled={createPost.isPending}
         >
           {createPost.isPending ? "Submitting..." : "Submit"}
