@@ -5,7 +5,6 @@ import {
   protectedProcedure,
   publicProcedure,
 } from "~/server/api/trpc";
-import { posts } from "~/server/db/schema";
 
 export const postRouter = createTRPCRouter({
   hello: publicProcedure
@@ -16,21 +15,20 @@ export const postRouter = createTRPCRouter({
       };
     }),
 
-  create: protectedProcedure
-    .input(z.object({ name: z.string().min(1) }))
-    .mutation(async ({ ctx, input }) => {
-      await ctx.db.insert(posts).values({
-        name: input.name,
-        createdById: ctx.session.user.id,
-      });
-    }),
+  // Example: Get user's profile
+  getProfile: protectedProcedure.query(async ({ ctx }) => {
+    return {
+      id: ctx.session.user.id,
+      email: ctx.session.user.email,
+      username: ctx.session.user.username,
+      isAdmin: ctx.session.user.isAdmin,
+    };
+  }),
 
+  // This will be replaced with actual vault functionality later
   getLatest: protectedProcedure.query(async ({ ctx }) => {
-    const post = await ctx.db.query.posts.findFirst({
-      orderBy: (posts, { desc }) => [desc(posts.createdAt)],
-    });
-
-    return post ?? null;
+    // Placeholder for now
+    return null;
   }),
 
   getSecretMessage: protectedProcedure.query(() => {
