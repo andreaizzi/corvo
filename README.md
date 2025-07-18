@@ -2,6 +2,10 @@
 
 Corvo is an open-source, self-hosted digital legacy management platform. It helps users securely store important information and ensures their final wishes are carried out after their passing. Unlike commercial alternatives, Corvo gives you complete control over your data by running on your own infrastructure.
 
+Thisproject is currently under active development.
+
+![Corvo Dashboard](./public/dashboard-desktop-v1.webp)
+
 ## Key Features
 
 * **Digital Vault:** Securely store documents, images, credentials, and notes with client-side encryption.
