@@ -1,4 +1,4 @@
-import { sql } from "drizzle-orm";
+import { sql, relations } from "drizzle-orm";
 import {
   boolean,
   index,
@@ -63,6 +63,8 @@ export const users = createTable(
   ]
 );
 
+/*// NextAuth sessions table
+
 export const sessions = createTable(
   "session",
   (d) => ({
@@ -73,7 +75,7 @@ export const sessions = createTable(
     expires: d.timestamp({ mode: "date", withTimezone: true }).notNull(),
   }),
   (t) => [index("t_user_id_idx").on(t.userId)],
-);
+); */
 
 // NextAuth accounts table (for OAuth providers)
 export const accounts = createTable(
@@ -159,7 +161,7 @@ export const userPreferences = createTable("user_preferences", {
 });
 
 // NextAuth verification tokens
-export const verificationTokens = createTable(
+/* export const verificationTokens = createTable(
   "verification_token",
   {
     identifier: varchar("identifier", { length: 255 }).notNull(),
@@ -170,7 +172,7 @@ export const verificationTokens = createTable(
     }).notNull(),
   },
   (t) => [primaryKey({ columns: [t.identifier, t.token] })]
-);
+); */
 
 // =====================================================
 // ADMINISTRATION & MONITORING
@@ -191,3 +193,66 @@ export const systemConfig = createTable("system_config", {
     .default(sql`CURRENT_TIMESTAMP`)
     .notNull(),
 });
+
+// =====================================================
+// RELATIONS
+// =====================================================
+
+// User relations
+export const usersRelations = relations(users, ({ one, many }) => ({
+  // One-to-many: User has many sessions
+  // sessions: many(sessions),
+  // One-to-many: User has many accounts (OAuth providers)
+  accounts: many(accounts),
+  // One-to-many: User has many email verification tokens
+  emailVerificationTokens: many(emailVerificationTokens),
+  // One-to-many: User has many password reset tokens
+  passwordResetTokens: many(passwordResetTokens),
+  // One-to-one: User has one user preferences
+  userPreferences: one(userPreferences),
+}));
+
+// Session relations
+/* export const sessionsRelations = relations(sessions, ({ one }) => ({
+  // Many-to-one: Session belongs to one user
+  user: one(users, {
+    fields: [sessions.userId],
+    references: [users.id],
+  }),
+})); */
+
+// Account relations
+export const accountsRelations = relations(accounts, ({ one }) => ({
+  // Many-to-one: Account belongs to one user
+  user: one(users, {
+    fields: [accounts.userId],
+    references: [users.id],
+  }),
+}));
+
+// Email verification token relations
+export const emailVerificationTokensRelations = relations(emailVerificationTokens, ({ one }) => ({
+  // Many-to-one: Token belongs to one user
+  user: one(users, {
+    fields: [emailVerificationTokens.userId],
+    references: [users.id],
+  }),
+}));
+
+// Password reset token relations
+export const passwordResetTokensRelations = relations(passwordResetTokens, ({ one }) => ({
+  // Many-to-one: Token belongs to one user
+  user: one(users, {
+    fields: [passwordResetTokens.userId],
+    references: [users.id],
+  }),
+}));
+
+// User preferences relations
+export const userPreferencesRelations = relations(userPreferences, ({ one }) => ({
+  // One-to-one: Preferences belong to one user
+  user: one(users, {
+    fields: [userPreferences.userId],
+    references: [users.id],
+  }),
+}));
