@@ -160,7 +160,7 @@ export const userPreferences = createTable("user_preferences", {
     .notNull(),
 });
 
-// NextAuth verification tokens
+// NextAuth verification tokens for magic links
 /* export const verificationTokens = createTable(
   "verification_token",
   {

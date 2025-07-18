@@ -1,29 +1,73 @@
-# Create T3 App
+# Corvo
 
-This is a [T3 Stack](https://create.t3.gg/) project bootstrapped with `create-t3-app`.
+Corvo is an open-source, self-hosted digital legacy management platform. It helps users securely store important information and ensures their final wishes are carried out after their passing. Unlike commercial alternatives, Corvo gives you complete control over your data by running on your own infrastructure.
 
-## What's next? How do I make an app with this?
+## Key Features
 
-We try to keep this project as simple as possible, so you can start with just the scaffolding we set up for you, and add additional things later when they become necessary.
+* **Digital Vault:** Securely store documents, images, credentials, and notes with client-side encryption.
+* **Dead Man's Switch:** An automated check-in system that triggers information distribution if you become incapacitated.
+* **Recipient Management:** Designate trusted individuals to receive your digital assets with granular access controls.
+* **Self-Hosted:** Maintain complete ownership and privacy of your data by hosting Corvo on your own server.
+* **End-to-End Encryption:** Your data is encrypted on your device before being sent to the server, ensuring maximum security.
 
-If you are not familiar with the different technologies used in this project, please refer to the respective docs. If you still are in the wind, please join our [Discord](https://t3.gg/discord) and ask for help.
+## Tech Stack
 
-- [Next.js](https://nextjs.org)
-- [NextAuth.js](https://next-auth.js.org)
-- [Prisma](https://prisma.io)
-- [Drizzle](https://orm.drizzle.team)
-- [Tailwind CSS](https://tailwindcss.com)
-- [tRPC](https://trpc.io)
+Corvo is built with the T3 Stack, which includes:
 
-## Learn More
+* Next.js (with TypeScript)
+* tRPC
+* ChakraUI
+* Drizzle ORM
+* PostgreSQL
+* NextAuth.js
 
-To learn more about the [T3 Stack](https://create.t3.gg/), take a look at the following resources:
+## Getting Started
 
-- [Documentation](https://create.t3.gg/)
-- [Learn the T3 Stack](https://create.t3.gg/en/faq#what-learning-resources-are-currently-available) — Check out these awesome tutorials
+To get a local copy up and running, follow these simple steps.
 
-You can check out the [create-t3-app GitHub repository](https://github.com/t3-oss/create-t3-app) — your feedback and contributions are welcome!
+### Prerequisites
 
-## How do I deploy this?
+* Node.js
+* npm
+* Docker
 
-Follow our deployment guides for [Vercel](https://create.t3.gg/en/deployment/vercel), [Netlify](https://create.t3.gg/en/deployment/netlify) and [Docker](https://create.t3.gg/en/deployment/docker) for more information.
+### Installation
+
+1. **Clone the repo**
+   **Bash**
+
+   ```
+   git clone https://github.com/andreaizzi/corvo.git
+   ```
+2. **Install NPM packages**
+   **Bash**
+
+   ```
+   npm install
+   ```
+3. **Set up environment variables**
+   Create a `.env` file and add the necessary environment variables (see `.env.example`).
+4. **Run the development server**
+   **Bash**
+
+   ```
+   npm run dev
+   ```
+
+## Roadmap
+
+See the [open issues](https://www.google.com/search?q=https://github.com/andreaizzi/corvo/issues) for a list of proposed features (and known issues). View our [roadmap](https://www.google.com/search?q=./corvo-roadmap.md) to see the future direction of the project.
+
+## Contributing
+
+Contributions are what make the open-source community such an amazing place to learn, inspire, and create. Any contributions you make are  **greatly appreciated** .
+
+1. Fork the Project
+2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the Branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
+
+## License
+
+Distributed under the MIT License. See `LICENSE` for more information.
