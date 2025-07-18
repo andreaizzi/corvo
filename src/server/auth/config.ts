@@ -7,9 +7,7 @@ import { z } from "zod";
 import { db } from "~/server/db";
 import {
   accounts,
-  sessions,
   users,
-  verificationTokens,
 } from "~/server/db/schema";
 import { eq } from "drizzle-orm";
 
@@ -115,8 +113,10 @@ export const authConfig = {
   adapter: DrizzleAdapter(db, {
     usersTable: users,
     accountsTable: accounts,
-    sessionsTable: sessions,
-    verificationTokensTable: verificationTokens,
+    // The following tables are prepared for future implementation
+    // https://authjs.dev/getting-started/adapters/drizzle#passing-your-own-schemas
+    // sessionsTable: sessions,
+    // verificationTokensTable: verificationTokens,
   }),
   session: {
     strategy: "jwt", // Required for credentials provider
