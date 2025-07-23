@@ -23,7 +23,7 @@ import {
 } from "@chakra-ui/react";
 import { toaster } from "~/components/ui/toaster";
 import { api } from "~/trpc/react";
-import { FiLogOut, FiUser, FiShield, FiSettings } from "react-icons/fi";
+import { LuLogOut, LuUser, LuShield, LuSettings } from "react-icons/lu";
 
 export default function SessionPage() {
     const { data: session, status } = useSession();
@@ -145,7 +145,7 @@ export default function SessionPage() {
                                             onClick={handleSignOut}
                                             loading={isSigningOut}
                                         >
-                                            <FiLogOut />
+                                            <LuLogOut />
                                             Sign Out
                                         </Button>
                                     )}
@@ -156,7 +156,7 @@ export default function SessionPage() {
                                             <Group>
                                                 <Button asChild colorPalette="blue">
                                                     <Link href="/auth/signin">
-                                                        <FiUser />
+                                                        <LuUser />
                                                         Sign In
                                                     </Link>
                                                 </Button>
@@ -288,13 +288,13 @@ export default function SessionPage() {
                                             <Group gap={3}>
                                                 <Button asChild colorPalette="blue">
                                                     <Link href="/dashboard">
-                                                        <FiShield />
+                                                        <LuShield />
                                                         Go to Dashboard
                                                     </Link>
                                                 </Button>
                                                 <Button asChild variant="outline">
                                                     <Link href="/settings">
-                                                        <FiSettings />
+                                                        <LuSettings />
                                                         Account Settings
                                                     </Link>
                                                 </Button>
