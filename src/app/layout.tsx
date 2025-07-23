@@ -4,10 +4,11 @@ import { type Metadata } from "next";
 import { Geist } from "next/font/google";
 
 import { TRPCReactProvider } from "~/trpc/react";
-import { Provider } from "./components/ui/provider";
+import { ColorModeProvider } from "~/components/ui/color-mode";
 import { SessionProvider } from "~/components/session-provider";
-import NavigationBar from "~/components/navigation-bar";
-import { Box } from "@chakra-ui/react";
+import { auth } from "~/server/auth";
+import { Provider } from "~/components/ui/provider";
+import ResponsiveLayout from "~/components/responsive-layout";
 
 export const metadata: Metadata = {
   title: "Corvo - Digital Legacy Platform",
@@ -20,22 +21,32 @@ const geist = Geist({
   variable: "--font-geist-sans",
 });
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
+  const session = await auth();
+
+  // Check if we're on a protected route (not auth pages or home)
+  const showSidebar = session?.user;
+
   return (
     <html lang="en" className={`${geist.variable}`}>
       <body>
         <SessionProvider>
           <Provider>
-            <TRPCReactProvider>
-              <Box minH="100vh" bg="bg.canvas">
-                <NavigationBar />
-                <Box as="main">
+            <ColorModeProvider forcedTheme="dark">
+              <TRPCReactProvider>
+                <ResponsiveLayout
+                  user={showSidebar ? {
+                    name: session.user.name ?? "User",
+                    email: session.user.email,
+                    image: session.user.image ?? undefined,
+                  } : undefined}
+                >
                   {children}
-                </Box>
-              </Box>
-            </TRPCReactProvider>
+                </ResponsiveLayout>
+              </TRPCReactProvider>
+            </ColorModeProvider>
           </Provider>
         </SessionProvider>
       </body>
