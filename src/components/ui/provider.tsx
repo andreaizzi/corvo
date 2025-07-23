@@ -14,11 +14,17 @@ const customConfig = defineConfig({
         l3: { value: "0px" }, // Input radius
       },
     },
+    // Override font tokens to use Geist font
+    tokens: {
+      fonts: {
+        heading: { value: "var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif" },
+        body: { value: "var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif" },
+      },
+    },
   },
 });
 
 export const system = createSystem(defaultConfig, customConfig)
-
 
 export function Provider({ children }: { children: React.ReactNode }) {
   return <ChakraProvider value={system}>{children}</ChakraProvider>;
