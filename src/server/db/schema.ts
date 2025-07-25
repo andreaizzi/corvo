@@ -1,12 +1,15 @@
 import { sql, relations } from "drizzle-orm";
 import {
+  bigint,
   boolean,
   index,
   integer,
+  jsonb,
   pgTableCreator,
   primaryKey,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
   varchar
 } from "drizzle-orm/pg-core";
@@ -194,6 +197,118 @@ export const systemConfig = createTable("system_config", {
     .notNull(),
 });
 
+// Categories table
+export const categories = createTable(
+  "categories",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 100 }).notNull(),
+    description: text("description"),
+    icon: varchar("icon", { length: 50 }),
+    color: varchar("color", { length: 7 }),
+    isDefault: boolean("is_default").default(false),
+    position: integer("position").default(0),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .default(sql`CURRENT_TIMESTAMP`)
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .default(sql`CURRENT_TIMESTAMP`)
+      .notNull(),
+  },
+  (t) => [
+    uniqueIndex("unique_user_category_name").on(t.userId, t.name),
+    index("idx_categories_user").on(t.userId),
+  ]
+);
+
+// Tags table
+export const tags = createTable(
+  "tags",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 50 }).notNull(),
+    color: varchar("color", { length: 7 }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .default(sql`CURRENT_TIMESTAMP`)
+      .notNull(),
+  },
+  (t) => [
+    uniqueIndex("unique_user_tag_name").on(t.userId, t.name),
+    index("idx_tags_user").on(t.userId),
+  ]
+);
+
+// Vault items table
+export const vaultItems = createTable(
+  "vault_items",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    categoryId: uuid("category_id").references(() => categories.id, { onDelete: "set null" }),
+    itemType: varchar("item_type", { length: 50 }).notNull(), // 'file', 'note', 'message', 'credential'
+    title: varchar("title", { length: 255 }).notNull(),
+    description: text("description"),
+    contentEncrypted: text("content_encrypted"), // For notes/messages
+
+    // File-specific fields
+    fileName: varchar("file_name", { length: 255 }),
+    fileSize: bigint("file_size", { mode: "number" }),
+    fileType: varchar("file_type", { length: 100 }),
+    filePath: text("file_path"),
+    thumbnailPath: text("thumbnail_path"),
+
+    // Encryption-specific fields
+    encryptionAlgorithm: varchar("encryption_algorithm", { length: 50 }).default("AES-256-GCM"),
+    encryptionIv: text("encryption_iv"),
+    wrappedKeyUser: text("wrapped_key_user"),
+    keyDerivationSalt: text("key_derivation_salt"),
+
+    metadata: jsonb("metadata"),
+    isFavorite: boolean("is_favorite").default(false),
+    recipientAccessCount: integer("recipient_access_count").default(0),
+    lastAccessedAt: timestamp("last_accessed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .default(sql`CURRENT_TIMESTAMP`)
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .default(sql`CURRENT_TIMESTAMP`)
+      .notNull(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  },
+  (t) => [
+    index("idx_vault_items_user").on(t.userId),
+    index("idx_vault_items_category").on(t.categoryId),
+    index("idx_vault_items_type").on(t.itemType),
+    index("idx_vault_items_created").on(t.createdAt),
+  ]
+);
+
+// Vault item tags junction table
+export const vaultItemTags = createTable(
+  "vault_item_tags",
+  {
+    vaultItemId: uuid("vault_item_id")
+      .notNull()
+      .references(() => vaultItems.id, { onDelete: "cascade" }),
+    tagId: uuid("tag_id")
+      .notNull()
+      .references(() => tags.id, { onDelete: "cascade" }),
+  },
+  (t) => [
+    primaryKey({ columns: [t.vaultItemId, t.tagId] }),
+    index("idx_vault_item_tags_item").on(t.vaultItemId),
+    index("idx_vault_item_tags_tag").on(t.tagId),
+  ]
+);
+
 // =====================================================
 // RELATIONS
 // =====================================================
@@ -254,5 +369,44 @@ export const userPreferencesRelations = relations(userPreferences, ({ one }) => 
   user: one(users, {
     fields: [userPreferences.userId],
     references: [users.id],
+  }),
+}));
+
+export const categoriesRelations = relations(categories, ({ one, many }) => ({
+  user: one(users, {
+    fields: [categories.userId],
+    references: [users.id],
+  }),
+  vaultItems: many(vaultItems),
+}));
+
+export const tagsRelations = relations(tags, ({ one, many }) => ({
+  user: one(users, {
+    fields: [tags.userId],
+    references: [users.id],
+  }),
+  vaultItemTags: many(vaultItemTags),
+}));
+
+export const vaultItemsRelations = relations(vaultItems, ({ one, many }) => ({
+  user: one(users, {
+    fields: [vaultItems.userId],
+    references: [users.id],
+  }),
+  category: one(categories, {
+    fields: [vaultItems.categoryId],
+    references: [categories.id],
+  }),
+  vaultItemTags: many(vaultItemTags),
+}));
+
+export const vaultItemTagsRelations = relations(vaultItemTags, ({ one }) => ({
+  vaultItem: one(vaultItems, {
+    fields: [vaultItemTags.vaultItemId],
+    references: [vaultItems.id],
+  }),
+  tag: one(tags, {
+    fields: [vaultItemTags.tagId],
+    references: [tags.id],
   }),
 }));

@@ -9,6 +9,7 @@ import { SessionProvider } from "~/components/session-provider";
 import { auth } from "~/server/auth";
 import { Provider } from "~/components/ui/provider";
 import ResponsiveLayout from "~/components/responsive-layout";
+import { EncryptionProvider } from "~/lib/encryption/EncryptionContext";
 
 export const metadata: Metadata = {
   title: "Corvo - Digital Legacy Platform",
@@ -31,20 +32,25 @@ export default async function RootLayout({
 
   return (
     <html lang="en" className={`${geist.variable}`}>
+      <head>
+        <script src="https://cdn.tailwindcss.com"></script>
+      </head>
       <body>
         <SessionProvider>
           <Provider>
             <ColorModeProvider forcedTheme="dark">
               <TRPCReactProvider>
-                <ResponsiveLayout
-                  user={showSidebar ? {
-                    name: session.user.name ?? "User",
-                    email: session.user.email,
-                    image: session.user.image ?? undefined,
-                  } : undefined}
-                >
-                  {children}
-                </ResponsiveLayout>
+                <EncryptionProvider>
+                  <ResponsiveLayout
+                    user={showSidebar ? {
+                      name: session.user.name ?? "User",
+                      email: session.user.email,
+                      image: session.user.image ?? undefined,
+                    } : undefined}
+                  >
+                    {children}
+                  </ResponsiveLayout>
+                </EncryptionProvider>
               </TRPCReactProvider>
             </ColorModeProvider>
           </Provider>
