@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 import { api } from "~/trpc/react";
-import { clientEncryption, base64ToArrayBuffer } from "~/lib/encryption/encryption";
-import { useEncryption } from "~/lib/encryption/EncryptionContext";
 import PasswordPrompt from "./PasswordPrompt";
+import { useEncryption } from "~/lib/encryption/EncryptionContext";
+import { base64ToArrayBuffer, clientEncryption } from "~/lib/encryption/encryption";
 
 interface FileListProps {
     categoryId?: string;
@@ -13,11 +13,13 @@ interface FileListProps {
 export default function FileList({ categoryId }: FileListProps) {
     const [showPasswordPrompt, setShowPasswordPrompt] = useState(false);
     const [downloadingFile, setDownloadingFile] = useState<string | null>(null);
+    const [fileSalt, setFileSalt] = useState<Uint8Array | null>(null);
     const [editingFile, setEditingFile] = useState<string | null>(null);
     const [editTitle, setEditTitle] = useState("");
     const [editDescription, setEditDescription] = useState("");
 
     const { getKey } = useEncryption();
+    const utils = api.useUtils();
 
     const { data: files, refetch } = api.vault.getFiles.useQuery({ categoryId });
     const downloadFile = api.vault.downloadFile.useMutation();
@@ -40,13 +42,6 @@ export default function FileList({ categoryId }: FileListProps) {
     };
 
     const decryptAndDownload = async (fileId: string) => {
-        const keyData = getKey();
-        if (!keyData) {
-            setDownloadingFile(fileId);
-            setShowPasswordPrompt(true);
-            return;
-        }
-
         setShowPasswordPrompt(false);
 
         try {
@@ -54,16 +49,21 @@ export default function FileList({ categoryId }: FileListProps) {
             const fileData = await downloadFile.mutateAsync({ id: fileId });
 
             // Parse encryption metadata
-            const [fileIvBase64, wrapIvBase64] = fileData.encryptionIv!.split(":");
-            const fileIv = new Uint8Array(base64ToArrayBuffer(fileIvBase64!));
-            const wrapIv = new Uint8Array(base64ToArrayBuffer(wrapIvBase64!));
-            const salt = new Uint8Array(base64ToArrayBuffer(fileData.keyDerivationSalt!));
+            const [fileIvBase64, wrapIvBase64] = fileData.encryptionIv.split(":");
+            const fileIv = new Uint8Array(base64ToArrayBuffer(fileIvBase64));
+            const wrapIv = new Uint8Array(base64ToArrayBuffer(wrapIvBase64));
+
+            // Get the key from cache (it should be there now)
+            const keyData = getKey();
+            if (!keyData) {
+                throw new Error("No encryption key available");
+            }
 
             // Use the stored user key
             const { key: userKey } = keyData;
 
             // Unwrap the file key
-            const wrappedKey = base64ToArrayBuffer(fileData.wrappedKeyUser!);
+            const wrappedKey = base64ToArrayBuffer(fileData.wrappedKeyUser);
             const fileKey = await clientEncryption.unwrapKey(wrappedKey, userKey, wrapIv);
 
             // Decrypt the file
@@ -71,11 +71,11 @@ export default function FileList({ categoryId }: FileListProps) {
             const decryptedData = await clientEncryption.decryptFile(encryptedData, fileKey, fileIv);
 
             // Create blob and download
-            const blob = new Blob([decryptedData], { type: fileData.fileType ?? undefined });
+            const blob = new Blob([decryptedData], { type: fileData.fileType });
             const url = URL.createObjectURL(blob);
             const a = document.createElement("a");
             a.href = url;
-            a.download = fileData.fileName ?? "download";
+            a.download = fileData.fileName;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
@@ -89,8 +89,27 @@ export default function FileList({ categoryId }: FileListProps) {
         }
     };
 
-    const handleDownload = (fileId: string) => {
-        decryptAndDownload(fileId);
+    const handleDownload = async (fileId: string) => {
+        const keyData = getKey();
+        if (!keyData) {
+            // We need to get the salt from the file first
+            setDownloadingFile(fileId);
+
+            try {
+                // Get file metadata including salt using tRPC utils
+                const fileMetadata = await utils.vault.getFile.fetch({ id: fileId });
+                const salt = new Uint8Array(base64ToArrayBuffer(fileMetadata.keyDerivationSalt));
+                setFileSalt(salt);
+                setShowPasswordPrompt(true);
+            } catch (err) {
+                console.error("Failed to get file metadata:", err);
+                setDownloadingFile(null);
+            }
+        } else {
+            // Key is already cached, proceed with download
+            setDownloadingFile(fileId);
+            void decryptAndDownload(fileId);
+        }
     };
 
     const handleEdit = (file: any) => {
@@ -124,6 +143,7 @@ export default function FileList({ categoryId }: FileListProps) {
 
     const handlePasswordVerified = () => {
         setShowPasswordPrompt(false);
+        setFileSalt(null);
         if (downloadingFile) {
             decryptAndDownload(downloadingFile);
         }
@@ -242,7 +262,9 @@ export default function FileList({ categoryId }: FileListProps) {
                     onCancel={() => {
                         setShowPasswordPrompt(false);
                         setDownloadingFile(null);
+                        setFileSalt(null);
                     }}
+                    salt={fileSalt || undefined}
                 />
             )}
         </div>

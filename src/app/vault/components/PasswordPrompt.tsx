@@ -7,9 +7,10 @@ import { api } from "~/trpc/react";
 interface PasswordPromptProps {
     onPasswordVerified: () => void;
     onCancel: () => void;
+    salt?: Uint8Array; // Optional salt for deriving the same key
 }
 
-export default function PasswordPrompt({ onPasswordVerified, onCancel }: PasswordPromptProps) {
+export default function PasswordPrompt({ onPasswordVerified, onCancel, salt }: PasswordPromptProps) {
     const [password, setPassword] = useState("");
     const [error, setError] = useState("");
     const { deriveAndStoreKey } = useEncryption();
@@ -18,7 +19,8 @@ export default function PasswordPrompt({ onPasswordVerified, onCancel }: Passwor
         onSuccess: async () => {
             try {
                 // Derive and store the key in memory (not the password!)
-                await deriveAndStoreKey(password);
+                // Use provided salt if decrypting existing files
+                await deriveAndStoreKey(password, salt);
                 onPasswordVerified();
             } catch (err) {
                 setError("Failed to derive encryption key");

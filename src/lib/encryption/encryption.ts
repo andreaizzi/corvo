@@ -146,16 +146,16 @@ export const clientEncryption = {
     },
 };
 
-// Secure key storage in memory only
+// Secure key storage in memory only (not in sessionStorage)
 class SecureKeyCache {
     private userKey: CryptoKey | null = null;
     private salt: Uint8Array | null = null;
     private timestamp: number | null = null;
     private readonly CACHE_DURATION = 30 * 60 * 1000; // 30 minutes
 
-    async deriveAndStore(password: string): Promise<{ key: CryptoKey; salt: Uint8Array }> {
-        // Generate a consistent salt for this session
-        this.salt = this.salt ?? generateRandomBytes(ENCRYPTION_CONFIG.saltLength);
+    async deriveAndStore(password: string, salt?: Uint8Array): Promise<{ key: CryptoKey; salt: Uint8Array }> {
+        // Use provided salt or generate new one (for first time)
+        this.salt = salt ?? generateRandomBytes(ENCRYPTION_CONFIG.saltLength);
 
         // Derive the key
         this.userKey = await clientEncryption.deriveKey(password, this.salt);

@@ -3,9 +3,10 @@
 import React, { createContext, useContext, useCallback, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { keyCache } from "./encryption";
+
 interface EncryptionContextType {
     hasKey: boolean;
-    deriveAndStoreKey: (password: string) => Promise<{ key: CryptoKey; salt: Uint8Array }>;
+    deriveAndStoreKey: (password: string, salt?: Uint8Array) => Promise<{ key: CryptoKey; salt: Uint8Array }>;
     getKey: () => { key: CryptoKey; salt: Uint8Array } | null;
     clearKey: () => void;
 }
@@ -35,8 +36,8 @@ export function EncryptionProvider({ children }: { children: React.ReactNode }) 
         };
     }, []);
 
-    const deriveAndStoreKey = useCallback(async (password: string) => {
-        return keyCache.deriveAndStore(password);
+    const deriveAndStoreKey = useCallback(async (password: string, salt?: Uint8Array) => {
+        return keyCache.deriveAndStore(password, salt);
     }, []);
 
     const getKey = useCallback(() => {
