@@ -219,7 +219,7 @@ export const categories = createTable(
       .notNull(),
   },
   (t) => [
-    uniqueIndex("unique_user_category_name").on(t.userId, t.name),
+    uniqueIndex("idx_categories_user_name").on(t.userId, t.name),
     index("idx_categories_user").on(t.userId),
   ]
 );
@@ -239,7 +239,7 @@ export const tags = createTable(
       .notNull(),
   },
   (t) => [
-    uniqueIndex("unique_user_tag_name").on(t.userId, t.name),
+    uniqueIndex("idx_tags_user_name").on(t.userId, t.name),
     index("idx_tags_user").on(t.userId),
   ]
 );
@@ -310,6 +310,120 @@ export const vaultItemTags = createTable(
 );
 
 // =====================================================
+// RECIPIENT MANAGEMENT SYSTEM
+// =====================================================
+
+// Recipients table - stores recipient information
+export const recipients = createTable(
+  "recipients",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    email: varchar("email", { length: 255 }).notNull(),
+    fullName: varchar("full_name", { length: 255 }).notNull(),
+    phoneNumber: varchar("phone_number", { length: 50 }),
+    relationship: varchar("relationship", { length: 100 }),
+    notes: text("notes"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .default(sql`CURRENT_TIMESTAMP`)
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .default(sql`CURRENT_TIMESTAMP`)
+      .notNull(),
+  },
+  (t) => [
+    uniqueIndex("idx_recipients_user_email").on(t.userId, t.email),
+    index("idx_recipients_user").on(t.userId),
+    index("idx_recipients_email").on(t.email),
+  ]
+);
+
+// Recipient access codes - one per recipient
+export const recipientAccessCodes = createTable(
+  "recipient_access_codes",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    recipientId: uuid("recipient_id")
+      .unique()
+      .notNull()
+      .references(() => recipients.id, { onDelete: "cascade" }),
+
+    // Access code encrypted with system master key
+    accessCodeEncrypted: text("access_code_encrypted").notNull(),
+    encryptionIv: text("encryption_iv").notNull(),
+    codeSalt: text("code_salt").notNull(), // Salt for recipient key derivation
+
+    // Activation
+    isActive: boolean("is_active").default(false),
+    activatedAt: timestamp("activated_at", { withTimezone: true }),
+
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .default(sql`CURRENT_TIMESTAMP`)
+      .notNull(),
+  },
+  (t) => [
+    index("idx_recipient_access_codes_recipient").on(t.recipientId),
+    index("idx_recipient_access_codes_active").on(t.isActive),
+  ]
+);
+
+// Recipient file keys - file keys encrypted with recipient's key
+export const recipientFileKeys = createTable(
+  "recipient_file_keys",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    accessCodeId: uuid("access_code_id")
+      .notNull()
+      .references(() => recipientAccessCodes.id, { onDelete: "cascade" }),
+    vaultItemId: uuid("vault_item_id")
+      .notNull()
+      .references(() => vaultItems.id, { onDelete: "cascade" }),
+
+    // File key encrypted with recipient's key
+    encryptedFileKey: text("encrypted_file_key").notNull(),
+    encryptionIv: text("encryption_iv").notNull(),
+
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .default(sql`CURRENT_TIMESTAMP`)
+      .notNull(),
+  },
+  (t) => [
+    uniqueIndex("idx_recipient_file_keys_unique").on(t.accessCodeId, t.vaultItemId),
+    index("idx_recipient_file_keys_access_code").on(t.accessCodeId),
+    index("idx_recipient_file_keys_vault_item").on(t.vaultItemId),
+  ]
+);
+
+// Recipient access logs - audit trail for recipient access
+export const recipientAccessLogs = createTable(
+  "recipient_access_logs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    accessCodeId: uuid("access_code_id")
+      .notNull()
+      .references(() => recipientAccessCodes.id, { onDelete: "cascade" }),
+    vaultItemId: uuid("vault_item_id")
+      .notNull()
+      .references(() => vaultItems.id, { onDelete: "cascade" }),
+    accessType: varchar("access_type", { length: 50 }).notNull(), // 'view', 'download'
+    ipAddress: varchar("ip_address", { length: 45 }),
+    userAgent: text("user_agent"),
+    accessGranted: boolean("access_granted").default(true),
+    denialReason: varchar("denial_reason", { length: 255 }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .default(sql`CURRENT_TIMESTAMP`)
+      .notNull(),
+  },
+  (t) => [
+    index("idx_recipient_access_logs_access_code").on(t.accessCodeId),
+    index("idx_recipient_access_logs_vault_item").on(t.vaultItemId),
+    index("idx_recipient_access_logs_created").on(t.createdAt),
+  ]
+);
+
+// =====================================================
 // RELATIONS
 // =====================================================
 
@@ -325,6 +439,10 @@ export const usersRelations = relations(users, ({ one, many }) => ({
   passwordResetTokens: many(passwordResetTokens),
   // One-to-one: User has one user preferences
   userPreferences: one(userPreferences),
+  categories: many(categories),
+  tags: many(tags),
+  vaultItems: many(vaultItems),
+  recipients: many(recipients),
 }));
 
 // Session relations
@@ -372,6 +490,7 @@ export const userPreferencesRelations = relations(userPreferences, ({ one }) => 
   }),
 }));
 
+// Categories relations
 export const categoriesRelations = relations(categories, ({ one, many }) => ({
   user: one(users, {
     fields: [categories.userId],
@@ -380,6 +499,7 @@ export const categoriesRelations = relations(categories, ({ one, many }) => ({
   vaultItems: many(vaultItems),
 }));
 
+// Tags relations
 export const tagsRelations = relations(tags, ({ one, many }) => ({
   user: one(users, {
     fields: [tags.userId],
@@ -388,6 +508,7 @@ export const tagsRelations = relations(tags, ({ one, many }) => ({
   vaultItemTags: many(vaultItemTags),
 }));
 
+// Vault items relations
 export const vaultItemsRelations = relations(vaultItems, ({ one, many }) => ({
   user: one(users, {
     fields: [vaultItems.userId],
@@ -398,8 +519,10 @@ export const vaultItemsRelations = relations(vaultItems, ({ one, many }) => ({
     references: [categories.id],
   }),
   vaultItemTags: many(vaultItemTags),
+  recipientFileKeys: many(recipientFileKeys),
 }));
 
+// Vault item tags relations
 export const vaultItemTagsRelations = relations(vaultItemTags, ({ one }) => ({
   vaultItem: one(vaultItems, {
     fields: [vaultItemTags.vaultItemId],
@@ -408,5 +531,48 @@ export const vaultItemTagsRelations = relations(vaultItemTags, ({ one }) => ({
   tag: one(tags, {
     fields: [vaultItemTags.tagId],
     references: [tags.id],
+  }),
+}));
+
+// Recipients relations
+export const recipientsRelations = relations(recipients, ({ one, many }) => ({
+  user: one(users, {
+    fields: [recipients.userId],
+    references: [users.id],
+  }),
+  accessCode: one(recipientAccessCodes),
+}));
+
+// Recipient access codes relations
+export const recipientAccessCodesRelations = relations(recipientAccessCodes, ({ one, many }) => ({
+  recipient: one(recipients, {
+    fields: [recipientAccessCodes.recipientId],
+    references: [recipients.id],
+  }),
+  recipientFileKeys: many(recipientFileKeys),
+  accessLogs: many(recipientAccessLogs),
+}));
+
+// Recipient file keys relations
+export const recipientFileKeysRelations = relations(recipientFileKeys, ({ one }) => ({
+  accessCode: one(recipientAccessCodes, {
+    fields: [recipientFileKeys.accessCodeId],
+    references: [recipientAccessCodes.id],
+  }),
+  vaultItem: one(vaultItems, {
+    fields: [recipientFileKeys.vaultItemId],
+    references: [vaultItems.id],
+  }),
+}));
+
+// Recipient access logs relations
+export const recipientAccessLogsRelations = relations(recipientAccessLogs, ({ one }) => ({
+  accessCode: one(recipientAccessCodes, {
+    fields: [recipientAccessLogs.accessCodeId],
+    references: [recipientAccessCodes.id],
+  }),
+  vaultItem: one(vaultItems, {
+    fields: [recipientAccessLogs.vaultItemId],
+    references: [vaultItems.id],
   }),
 }));
