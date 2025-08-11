@@ -121,7 +121,7 @@ export default function FileUpload({ categoryId, onUploadComplete }: FileUploadP
     };
 
     return (
-        <div className="bg-white p-6 rounded-lg shadow">
+        <div className="p-6 rounded-lg shadow">
             <h2 className="text-xl font-bold mb-4">Upload File</h2>
 
             <div className="space-y-4">

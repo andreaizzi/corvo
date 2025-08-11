@@ -58,7 +58,6 @@ export default function FileList({ categoryId }: FileListProps) {
             if (!keyData) {
                 throw new Error("No encryption key available");
             }
-
             // Use the stored user key
             const { key: userKey } = keyData;
 
@@ -155,14 +154,14 @@ export default function FileList({ categoryId }: FileListProps) {
 
     if (files.length === 0) {
         return (
-            <div className="bg-white p-6 rounded-lg shadow text-center text-gray-500">
+            <div className="p-6 rounded-lg shadow text-center text-gray-500">
                 No files uploaded yet
             </div>
         );
     }
 
     return (
-        <div className="bg-white rounded-lg shadow">
+        <div className="rounded-lg shadow">
             <div className="p-6">
                 <h2 className="text-xl font-bold mb-4">Your Files</h2>
 
