@@ -94,7 +94,8 @@ export const clientEncryption = {
     async unwrapKey(
         wrappedKey: ArrayBuffer,
         unwrappingKey: CryptoKey,
-        iv: Uint8Array
+        iv: Uint8Array,
+        extractable = false
     ): Promise<CryptoKey> {
         return crypto.subtle.unwrapKey(
             'raw',
@@ -108,7 +109,7 @@ export const clientEncryption = {
                 name: ENCRYPTION_CONFIG.algorithm,
                 length: ENCRYPTION_CONFIG.keyLength,
             },
-            false,
+            extractable,
             ['encrypt', 'decrypt']
         );
     },
