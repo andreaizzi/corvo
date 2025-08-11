@@ -15,6 +15,7 @@ export const env = createEnv({
     NODE_ENV: z
       .enum(["development", "test", "production"])
       .default("development"),
+    CORVO_LEGACY_MASTER_KEY: z.string().min(1, "Legacy master key is required"),
   },
 
   /**
@@ -34,6 +35,7 @@ export const env = createEnv({
     AUTH_SECRET: process.env.AUTH_SECRET,
     DATABASE_URL: process.env.DATABASE_URL,
     NODE_ENV: process.env.NODE_ENV,
+    CORVO_LEGACY_MASTER_KEY: process.env.CORVO_LEGACY_MASTER_KEY,
   },
   /**
    * Run `build` or `dev` with `SKIP_ENV_VALIDATION` to skip env validation. This is especially
