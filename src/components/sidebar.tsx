@@ -15,7 +15,7 @@ import {
 } from "@chakra-ui/react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LuClock, LuEllipsisVertical, LuKeyRound, LuLayoutDashboard, LuLock, LuMessageSquare, LuSettings, LuUsersRound } from "react-icons/lu";
+import { LuClock, LuClockAlert, LuEllipsisVertical, LuKeyRound, LuLayoutDashboard, LuLock, LuMessageSquare, LuSettings, LuUsersRound } from "react-icons/lu";
 
 interface SidebarItem {
     label: string;
@@ -30,6 +30,7 @@ const navigationItems: SidebarItem[] = [
     { label: "Messages", href: "/messages", icon: LuMessageSquare },
     { label: "Recipients", href: "/recipients", icon: LuUsersRound },
     { label: "Dead Man's Switch", href: "/dead-mans-switch", icon: LuClock },
+    { label: "Trigger test", href: "/trigger-test", icon: LuClockAlert },
 ];
 
 interface SidebarProps {
