@@ -259,10 +259,10 @@ export const vaultItems = createTable(
     contentEncrypted: text("content_encrypted"), // For notes/messages
 
     // File-specific fields
-    fileName: varchar("file_name", { length: 255 }),
-    fileSize: bigint("file_size", { mode: "number" }),
-    fileType: varchar("file_type", { length: 100 }),
-    filePath: text("file_path"),
+    fileName: varchar("file_name", { length: 255 }).notNull(),
+    fileSize: bigint("file_size", { mode: "number" }).notNull(),
+    fileType: varchar("file_type", { length: 100 }).notNull(),
+    filePath: text("file_path").notNull(),
     thumbnailPath: text("thumbnail_path"),
 
     // Encryption-specific fields
@@ -272,8 +272,8 @@ export const vaultItems = createTable(
     keyDerivationSalt: text("key_derivation_salt"),
 
     metadata: jsonb("metadata"),
-    isFavorite: boolean("is_favorite").default(false),
-    recipientAccessCount: integer("recipient_access_count").default(0),
+    isFavorite: boolean("is_favorite").default(false).notNull(),
+    recipientAccessCount: integer("recipient_access_count").default(0).notNull(),
     lastAccessedAt: timestamp("last_accessed_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .default(sql`CURRENT_TIMESTAMP`)
