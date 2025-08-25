@@ -52,6 +52,7 @@ export const vaultRouter = createTRPCRouter({
                     fileName: input.fileName,
                     fileSize: input.fileSize,
                     fileType: input.fileType,
+                    filePath: "", // Set the file path after getting the id
                     encryptionAlgorithm: "AES-256-GCM",
                     encryptionIv: input.encryptionIv,
                     wrappedKeyUser: input.wrappedKeyUser,
@@ -111,19 +112,30 @@ export const vaultRouter = createTRPCRouter({
             const files = await ctx.db.query.vaultItems.findMany({
                 where: and(...conditions),
                 orderBy: (items, { desc }) => [desc(items.createdAt)],
+                with: {
+                    recipientFileKeys: {
+                        with: {
+                            accessCode: {
+                                with: {
+                                    recipient: true,
+                                },
+                            },
+                        },
+                    },
+                },
             });
 
             return files.map((file) => ({
-                id: file.id,
-                title: file.title,
-                description: file.description,
-                fileName: file.fileName,
-                fileSize: file.fileSize,
-                fileType: file.fileType,
-                categoryId: file.categoryId,
-                isFavorite: file.isFavorite,
-                createdAt: file.createdAt,
-                updatedAt: file.updatedAt,
+                ...file,
+                recipients: file.recipientFileKeys.map((fileKey) => ({
+                    id: fileKey.accessCode.recipient.id,
+                    email: fileKey.accessCode.recipient.email,
+                    fullName: fileKey.accessCode.recipient.fullName,
+                    phoneNumber: fileKey.accessCode.recipient.phoneNumber,
+                    relationship: fileKey.accessCode.recipient.relationship,
+                    isActive: fileKey.accessCode.isActive,
+                    activatedAt: fileKey.accessCode.activatedAt,
+                })),
             }));
         }),
 
@@ -149,7 +161,7 @@ export const vaultRouter = createTRPCRouter({
                 });
             }
 
-            return {
+            /* return {
                 id: file.id,
                 title: file.title,
                 description: file.description,
@@ -159,7 +171,9 @@ export const vaultRouter = createTRPCRouter({
                 encryptionIv: file.encryptionIv,
                 wrappedKeyUser: file.wrappedKeyUser,
                 keyDerivationSalt: file.keyDerivationSalt,
-            };
+            }; */
+
+            return file;
         }),
 
     // Download file (get encrypted content)
@@ -203,7 +217,7 @@ export const vaultRouter = createTRPCRouter({
                     wrappedKeyUser: file.wrappedKeyUser,
                     keyDerivationSalt: file.keyDerivationSalt,
                 };
-            } catch (error) {
+            } catch {
                 throw new TRPCError({
                     code: "INTERNAL_SERVER_ERROR",
                     message: "Failed to read file",
