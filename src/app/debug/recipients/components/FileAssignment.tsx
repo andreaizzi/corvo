@@ -4,7 +4,7 @@ import { useState } from "react";
 import { api } from "~/trpc/react";
 import { useEncryption } from "~/lib/encryption/EncryptionContext";
 import { base64ToArrayBuffer, arrayBufferToBase64, clientEncryption } from "~/lib/encryption/encryption";
-import PasswordPrompt from "~/app/vault/components/PasswordPrompt";
+import { PasswordPrompt } from "../../vault/components";
 
 interface FileAssignmentProps {
     recipientId: string;

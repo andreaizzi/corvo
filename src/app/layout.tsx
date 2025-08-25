@@ -32,9 +32,6 @@ export default async function RootLayout({
 
   return (
     <html lang="en" className={`${geist.variable}`}>
-      <head>
-        <script src="https://cdn.tailwindcss.com"></script>
-      </head>
       <body>
         <SessionProvider>
           <Provider>
