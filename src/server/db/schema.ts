@@ -267,9 +267,9 @@ export const vaultItems = createTable(
 
     // Encryption-specific fields
     encryptionAlgorithm: varchar("encryption_algorithm", { length: 50 }).default("AES-256-GCM"),
-    encryptionIv: text("encryption_iv"),
-    wrappedKeyUser: text("wrapped_key_user"),
-    keyDerivationSalt: text("key_derivation_salt"),
+    encryptionIv: text("encryption_iv").notNull(),
+    wrappedKeyUser: text("wrapped_key_user").notNull(),
+    keyDerivationSalt: text("key_derivation_salt").notNull(),
 
     metadata: jsonb("metadata"),
     isFavorite: boolean("is_favorite").default(false).notNull(),
