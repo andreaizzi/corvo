@@ -9,12 +9,12 @@ import {
     Flex,
     Grid,
     Heading,
+    Icon,
     IconButton,
     Input,
     InputGroup,
     Stack,
-    Text,
-    Icon
+    Text
 } from "@chakra-ui/react";
 import { useState } from "react";
 import {
@@ -28,25 +28,112 @@ import {
 
 import FileManagementDialog from "./components/FileManagementDialog";
 
-import { formatDate, formatFileSize, getFileIcon } from "./utils";
-import { categories } from "./data";
+import { useEncryption } from "~/lib/encryption/EncryptionContext";
+import { base64ToArrayBuffer, clientEncryption } from "~/lib/encryption/encryption";
 import { api } from "~/trpc/react";
+import { PasswordPromptDialog } from "./components";
+import { categories } from "./data";
 import type { VaultFile } from "./type";
+import { formatDate, formatFileSize, getFileIcon } from "./utils";
 
 
 export default function VaultPage() {
     const [selectedCategory, setSelectedCategory] = useState("all");
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedFile, setSelectedFile] = useState<VaultFile | null>(null);
+    const [downloadingFile, setDownloadingFile] = useState<VaultFile | null>(null);
+    const [fileSalt, setFileSalt] = useState<Uint8Array | null>(null);
+
     const [isDialogOpen, setIsDialogOpen] = useState(false);
+    const [showPasswordDialog, setShowPasswordDialog] = useState(false);
+    const { getKey } = useEncryption();
 
     // In production, these would be tRPC queries
-    const { data: files, refetch } = api.vault.getFiles.useQuery({/* categoryId: selectedCategory */});
+    const { data: files, refetch } = api.vault.getFiles.useQuery({/* categoryId: selectedCategory */ });
     // const { data: categories } = api.vault.getCategories.useQuery();
+    const downloadFile = api.vault.downloadFile.useMutation();
+
+    const decryptAndDownload = async (file: VaultFile) => {
+        // setShowPasswordDialog(false);
+
+        try {
+            // Get encrypted file data from server
+            const fileData = await downloadFile.mutateAsync({ id: file.id });
+
+            // Parse encryption metadata
+            const [fileIvBase64, wrapIvBase64] = fileData.encryptionIv.split(":");
+            const fileIv = new Uint8Array(base64ToArrayBuffer(fileIvBase64!));
+            const wrapIv = new Uint8Array(base64ToArrayBuffer(wrapIvBase64!));
+
+            // Get the key from cache (it should be there now)
+            const keyData = getKey();
+            if (!keyData) {
+                throw new Error("No encryption key available");
+            }
+            // Use the stored user key
+            const { key: userKey } = keyData;
+
+            // Unwrap the file key
+            const wrappedKey = base64ToArrayBuffer(fileData.wrappedKeyUser);
+            const fileKey = await clientEncryption.unwrapKey(wrappedKey, userKey, wrapIv);
+
+            // Decrypt the file
+            const encryptedData = base64ToArrayBuffer(fileData.encryptedData);
+            const decryptedData = await clientEncryption.decryptFile(encryptedData, fileKey, fileIv);
+
+            // Create blob and download
+            const blob = new Blob([decryptedData], { type: fileData.fileType });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = fileData.fileName;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            setDownloadingFile(null);
+        } catch (err) {
+            console.error("Decryption error:", err);
+            alert("Failed to decrypt file. Please try again.");
+            setDownloadingFile(null);
+        }
+    };
 
     const handleFileClick = (file: VaultFile) => {
         setSelectedFile(file);
         setIsDialogOpen(true);
+    };
+
+    const handleDownload = async (file: VaultFile) => {
+        const keyData = getKey();
+        if (!keyData) {
+            // We need to get the salt from the file first
+            setDownloadingFile(file);
+
+            try {
+                // Get file metadata including salt using tRPC utils
+                // const file = await api.vault.getFile.query({ id: fileId });
+                const salt = new Uint8Array(base64ToArrayBuffer(file.keyDerivationSalt));
+                setFileSalt(salt);
+                setShowPasswordDialog(true);
+            } catch (err) {
+                console.error("Failed to get file metadata:", err);
+                setDownloadingFile(null);
+            }
+        } else {
+            // Key is already cached, proceed with download
+            setDownloadingFile(file);
+            void decryptAndDownload(file);
+        }
+    };
+
+    const handlePasswordVerified = () => {
+        setShowPasswordDialog(false);
+        setFileSalt(null);
+        if (downloadingFile) {
+            void decryptAndDownload(downloadingFile);
+        }
     };
 
     return (
@@ -157,7 +244,7 @@ export default function VaultPage() {
                                                     >
                                                         <Icon as={getFileIcon(file.fileType)} />
                                                     </IconButton>
-                                                    <Box flex={1} maxW="100%">
+                                                    <Box flex={1} width="50%">
                                                         <Text
                                                             fontSize="lg"
                                                             fontWeight="medium"
@@ -173,7 +260,6 @@ export default function VaultPage() {
                                                 </Flex>
 
                                                 {/* Recipients */}
-                                                {file.recipients && file.recipients.length > 0 && (
                                                 <Box>
                                                     <Text
                                                         fontSize="xs"
@@ -184,34 +270,42 @@ export default function VaultPage() {
                                                     >
                                                         Recipients
                                                     </Text>
-                                                    <Flex gap={2} wrap="wrap">
-                                                        {file.recipients.slice(0, 2).map((recipient, index) => (
-                                                            <Badge
-                                                                key={index}
-                                                                bg="zinc.900"
-                                                                color="zinc.200"
-                                                                px={2.5}
-                                                                py={1}
-                                                                borderRadius="sm"
-                                                                fontSize="sm"
-                                                            >
-                                                                {recipient.fullName}
-                                                            </Badge>
-                                                        ))}
-                                                        {file.recipients.length > 2 && (
-                                                            <Badge
-                                                                px={2.5}
-                                                                py={1}
-                                                                borderRadius="sm"
-                                                                fontSize="sm"
-                                                                colorPalette="blue"
-                                                            >
-                                                                +{file.recipients.length - 2}
-                                                            </Badge>
-                                                        )}
-                                                    </Flex>
+
+                                                    {file.recipients && file.recipients.length > 0 ? (
+                                                        <Flex gap={2} wrap="wrap">
+                                                            {file.recipients.slice(0, 2).map((recipient, index) => (
+                                                                <Badge
+                                                                    key={index}
+                                                                    borderRadius="sm"
+                                                                    fontSize="sm"
+                                                                    px={2.5}
+                                                                    py={1}
+                                                                >
+                                                                    {recipient.fullName}
+                                                                </Badge>
+                                                            ))}
+                                                            {file.recipients.length > 2 && (
+                                                                <Badge
+                                                                    borderRadius="sm"
+                                                                    fontSize="sm"
+                                                                    colorPalette="blue"
+                                                                >
+                                                                    +{file.recipients.length - 2}
+                                                                </Badge>
+                                                            )}
+                                                        </Flex>
+                                                    ) : (
+                                                        <Badge
+                                                            px={0}
+                                                            py={0}
+                                                            borderRadius="sm"
+                                                            fontSize="sm"
+                                                            bg={"transparent"}
+                                                        >
+                                                            No recipients
+                                                        </Badge>
+                                                    )}
                                                 </Box>
-                                            )}
 
                                                 {/* Actions */}
                                                 <Flex gap={2}>
@@ -245,8 +339,9 @@ export default function VaultPage() {
                                                         aria-label="View"
                                                         onClick={(e) => {
                                                             e.stopPropagation();
-                                                            console.log("Download", file.id);
+                                                            void handleDownload(file);
                                                         }}
+                                                        disabled={downloadingFile === file}
                                                     > <LuDownload /> </IconButton>
                                                 </Flex>
                                             </Stack>
@@ -261,12 +356,31 @@ export default function VaultPage() {
             {/* File Management Dialog */}
             {selectedFile && (
                 <FileManagementDialog
+                    file={selectedFile}
+                    downloadingFile={downloadingFile}
                     isOpen={isDialogOpen}
+                    handleDownload={() => handleDownload(selectedFile)}
                     onCloseAction={() => {
                         setIsDialogOpen(false);
                         setSelectedFile(null);
                     }}
-                    file={selectedFile}
+                    refetch={refetch}
+                />
+            )}
+
+            {/* Password Prompt Dialog */}
+            {fileSalt && (
+                <PasswordPromptDialog
+                    isOpen={showPasswordDialog}
+                    onPasswordVerified={() => {
+                        handlePasswordVerified();
+                    }}
+                    onCloseAction={() => {
+                        setShowPasswordDialog(false)
+                        setFileSalt(null);
+                        setDownloadingFile(null);
+                    }}
+                    salt={fileSalt}
                 />
             )}
         </Box>

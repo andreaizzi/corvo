@@ -15,6 +15,7 @@ import {
     IconButton,
     Input,
     InputGroup,
+    Spinner,
     Stack,
     Tabs,
     Text,
@@ -29,6 +30,7 @@ import {
     LuTriangleAlert,
     LuUsers,
 } from "react-icons/lu";
+import { api } from "~/trpc/react";
 import type { VaultFile } from "../type";
 import { formatDate, formatFileSize, getFileIcon } from "../utils";
 
@@ -67,21 +69,51 @@ function GreyLabel({ children }: { children: React.ReactNode }) {
 }
 
 export default function FileManagementDialog({
-    isOpen,
-    onCloseAction,
     file,
+    downloadingFile,
+    isOpen,
+    handleDownload,
+    onCloseAction,
+    refetch
 }: {
-    isOpen: boolean;
-    onCloseAction: () => void;
     file: VaultFile;
+    downloadingFile: VaultFile | null;
+    isOpen: boolean;
+    handleDownload: () => void;
+    onCloseAction: () => void;
+    refetch: () => void;
 }) {
     const [assetName, setAssetName] = useState(file.title);
     const [description, setDescription] = useState(file.description ?? "");
+    const [isSaving, setIsSaving] = useState(false);
+
+    const updateFile = api.vault.updateFile.useMutation({
+        onMutate: () => {
+            setIsSaving(true);
+        },
+        onSuccess: () => {
+            setIsSaving(false);
+            refetch();
+            onCloseAction();
+        },
+        onError: () => {
+            setIsSaving(false);
+        }
+    });
+
+    const deleteFile = api.vault.deleteFile.useMutation({
+        onSuccess: () => {
+            void refetch();
+        }
+    });
 
     const handleSave = () => {
         // Handle save logic here
-        console.log("Saving:", { assetName, description });
-        onCloseAction();
+        updateFile.mutate({
+            id: file.id,
+            title: assetName,
+            description: description,
+        });
     };
 
     return (
@@ -294,8 +326,11 @@ export default function FileManagementDialog({
                                                     _hover={{ bg: "red.900/50" }}
                                                     size="md"
                                                     fontWeight="semibold"
+                                                    onClick={handleDownload}
+                                                    disabled={file === downloadingFile}
                                                 >
-                                                    <LuDownload /> Download
+                                                    {file === downloadingFile ? <Spinner size="sm" /> : <LuDownload />}
+                                                    Download
                                                 </Button>
                                                 <Button
                                                     bg="zinc.900"
@@ -408,7 +443,7 @@ export default function FileManagementDialog({
                         <Dialog.ActionTrigger asChild>
                             <Button variant="outline">Cancel</Button>
                         </Dialog.ActionTrigger>
-                        <Button onClick={handleSave}>Save</Button>
+                        <Button onClick={handleSave} disabled={isSaving}>{isSaving ? "Saving..." : "Save"}</Button>
                     </Dialog.Footer>
                 </Dialog.Content>
             </Dialog.Positioner>
