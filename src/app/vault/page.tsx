@@ -144,7 +144,7 @@ export default function VaultPage() {
                                         borderColor="zinc.800"
                                         borderWidth={1}
                                         _hover={{ borderColor: "zinc.700", cursor: "pointer" }}
-                                        onClick={() => handleFileClick(file as unknown as VaultFile)} // Type assertion to satisfy TS
+                                        onClick={() => handleFileClick(file)}
                                     >
                                         <Card.Body p={7}>
                                             <Stack gap={5}>
@@ -223,7 +223,7 @@ export default function VaultPage() {
                                                         size="lg"
                                                         onClick={(e) => {
                                                             e.stopPropagation();
-                                                            handleFileClick(file as unknown as VaultFile);
+                                                            handleFileClick(file);
                                                         }}
                                                     >
                                                         <LuSettings /> Manage
