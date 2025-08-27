@@ -54,7 +54,7 @@ export const clientEncryption = {
         return crypto.subtle.deriveKey(
             {
                 name: 'PBKDF2',
-                salt,
+                salt: new Uint8Array(salt),
                 iterations: ENCRYPTION_CONFIG.iterations,
                 hash: 'SHA-256',
             },
@@ -85,7 +85,7 @@ export const clientEncryption = {
             wrappingKey,
             {
                 name: ENCRYPTION_CONFIG.algorithm,
-                iv,
+                iv: new Uint8Array(iv),
             }
         );
     },
