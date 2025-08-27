@@ -6,13 +6,17 @@ import {
     Button,
     Card,
     Container,
+    createListCollection,
     Flex,
     Grid,
     Heading,
+    HStack,
     Icon,
     IconButton,
     Input,
     InputGroup,
+    Portal,
+    Select,
     Stack,
     Text
 } from "@chakra-ui/react";
@@ -28,8 +32,9 @@ import {
 
 import FileManagementDialog from "./components/FileManagementDialog";
 
+import type { SelectionDetails } from "node_modules/@chakra-ui/react/dist/types/components/menu/namespace";
 import { useEncryption } from "~/lib/encryption/EncryptionContext";
-import { base64ToArrayBuffer, clientEncryption } from "~/lib/encryption/encryption";
+import { arrayBufferToBase64, base64ToArrayBuffer, clientEncryption } from "~/lib/encryption/encryption";
 import { api } from "~/trpc/react";
 import { PasswordPromptDialog } from "./components";
 import { categories } from "./data";
@@ -42,6 +47,10 @@ export default function VaultPage() {
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedFile, setSelectedFile] = useState<VaultFile | null>(null);
     const [downloadingFile, setDownloadingFile] = useState<VaultFile | null>(null);
+    const [pendingFile, setPendingFile] = useState<VaultFile | null>(null);
+    const [selectedRecipientId, setSelectedRecipientId] = useState<string | null>(null);
+    const [fileRecipientsHover, setFileRecipientsHover] = useState<VaultFile | null>(null); // flag to know when the user hovers on the recipients select field for a single file.
+    const [fileRecipientsOpen, setFileRecipientsOpen] = useState<VaultFile | null>(null); // flag to know when the user has clicked on the recipients select field for a single file.
     const [fileSalt, setFileSalt] = useState<Uint8Array | null>(null);
 
     const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -52,10 +61,26 @@ export default function VaultPage() {
     const { data: files, refetch } = api.vault.getFiles.useQuery({/* categoryId: selectedCategory */ });
     // const { data: categories } = api.vault.getCategories.useQuery();
     const downloadFile = api.vault.downloadFile.useMutation();
+    // get all recipients available
+    const { data: recipients } = api.recipients.getAll.useQuery();
+
+    const assignFile = api.recipients.assignFileWithKey.useMutation({
+        onSuccess: () => {
+            void refetch();
+        },
+        onError: (error) => {
+            alert(`Failed to assign file: ${error.message}`);
+        },
+    });
+
+    const unassignFile = api.recipients.unassignFile.useMutation({
+        onSuccess: () => {
+            void refetch();
+            setPendingFile(null);
+        },
+    });
 
     const decryptAndDownload = async (file: VaultFile) => {
-        // setShowPasswordDialog(false);
-
         try {
             // Get encrypted file data from server
             const fileData = await downloadFile.mutateAsync({ id: file.id });
@@ -100,6 +125,38 @@ export default function VaultPage() {
         }
     };
 
+    const processFileAssignment = async (file: VaultFile, recipientId: string) => {
+        const keyData = getKey();
+        if (!keyData) {
+            alert("No encryption key available");
+            return;
+        }
+
+        try {
+            const [fileIvBase64, wrapIvBase64] = file.encryptionIv.split(":");
+            const wrapIv = new Uint8Array(base64ToArrayBuffer(wrapIvBase64!));
+
+            const wrappedKey = base64ToArrayBuffer(file.wrappedKeyUser);
+            const fileKey = await clientEncryption.unwrapKey(wrappedKey, keyData.key, wrapIv, true);
+
+            const fileKeyRaw = await crypto.subtle.exportKey('raw', fileKey);
+            const fileKeyBase64 = arrayBufferToBase64(fileKeyRaw);
+
+            // Assign the file with the unwrapped key
+            await assignFile.mutateAsync({
+                "recipientId": recipientId,
+                "fileId": file.id,
+                fileKeyBase64,
+            });
+
+        } catch (err) {
+            console.error("Failed to assign file:", err);
+            alert("Failed to assign file. Please try again.");
+        } finally {
+            setPendingFile(null);
+        }
+    };
+
     const handleFileClick = (file: VaultFile) => {
         setSelectedFile(file);
         setIsDialogOpen(true);
@@ -124,7 +181,7 @@ export default function VaultPage() {
         } else {
             // Key is already cached, proceed with download
             setDownloadingFile(file);
-            void decryptAndDownload(file);
+            await decryptAndDownload(file);
         }
     };
 
@@ -133,6 +190,33 @@ export default function VaultPage() {
         setFileSalt(null);
         if (downloadingFile) {
             void decryptAndDownload(downloadingFile);
+        }
+        if (pendingFile && selectedRecipientId) {
+            // If there is a pending file for assignment, proceed with assignment
+            void processFileAssignment(pendingFile, selectedRecipientId);
+        }
+    };
+
+    const handleAssign = async (file: VaultFile, event: SelectionDetails) => {
+        setPendingFile(file);
+        const selectedId = event.value;
+        const isAssigned = file.recipients.some(r => r.id === selectedId);
+        if (isAssigned) {
+            unassignFile.mutate({ fileId: file.id, recipientId: selectedId });
+        } else {
+            const keyData = getKey();
+            if (!keyData) {
+                try {
+                    const salt = new Uint8Array(base64ToArrayBuffer(file.keyDerivationSalt));
+                    setFileSalt(salt);
+                    setShowPasswordDialog(true);
+                } catch (err) {
+                    console.error("Failed to get file metadata:", err);
+                    setDownloadingFile(null);
+                }
+            } else {
+                await processFileAssignment(file, selectedId);
+            }
         }
     };
 
@@ -209,7 +293,7 @@ export default function VaultPage() {
                         ))}
                     </Flex>
 
-                    {!files ? <div>Loading... </div> : (
+                    {!files || !recipients ? <div>Loading... </div> : (
                         files.length === 0 ? (
                             <div className="p-6 rounded-lg shadow text-center text-gray-500">
                                 No files found
@@ -261,50 +345,125 @@ export default function VaultPage() {
 
                                                 {/* Recipients */}
                                                 <Box>
-                                                    <Text
-                                                        fontSize="xs"
-                                                        fontWeight="md"
-                                                        color="fg.muted"
-                                                        textTransform="uppercase"
-                                                        mb={2}
-                                                    >
-                                                        Recipients
-                                                    </Text>
-
-                                                    {file.recipients && file.recipients.length > 0 ? (
-                                                        <Flex gap={2} wrap="wrap">
-                                                            {file.recipients.slice(0, 2).map((recipient, index) => (
-                                                                <Badge
-                                                                    key={index}
-                                                                    borderRadius="sm"
-                                                                    fontSize="sm"
-                                                                    px={2.5}
-                                                                    py={1}
-                                                                >
-                                                                    {recipient.fullName}
-                                                                </Badge>
-                                                            ))}
-                                                            {file.recipients.length > 2 && (
-                                                                <Badge
-                                                                    borderRadius="sm"
-                                                                    fontSize="sm"
-                                                                    colorPalette="blue"
-                                                                >
-                                                                    +{file.recipients.length - 2}
-                                                                </Badge>
-                                                            )}
-                                                        </Flex>
-                                                    ) : (
-                                                        <Badge
-                                                            px={0}
-                                                            py={0}
-                                                            borderRadius="sm"
-                                                            fontSize="sm"
-                                                            bg={"transparent"}
+                                                    <>
+                                                        <Select.Root
+                                                            collection={createListCollection({
+                                                                items: recipients.map((recipient) => ({
+                                                                    id: recipient.id,
+                                                                    name: recipient.fullName,
+                                                                })),
+                                                                itemToString: (item) => item.name,
+                                                                itemToValue: (item) => item.id,
+                                                            })}
+                                                            size="sm"
+                                                            defaultValue={file.recipients.map(r => r.id)}
+                                                            positioning={{ sameWidth: true }}
+                                                            onSelect={async (e) => {
+                                                                setSelectedRecipientId(e.value);
+                                                                await handleAssign(file, e);
+                                                            }}
+                                                            closeOnSelect={false}
+                                                            onClick={(e) => {
+                                                                setFileRecipientsOpen(file);
+                                                                e.stopPropagation();
+                                                            }}
+                                                            value={file.recipients.map(r => r.id)}
+                                                            gap={0}
+                                                            onMouseOver={() => {
+                                                                setFileRecipientsHover(file)
+                                                            }}
+                                                            onMouseOut={() => {
+                                                                if (!pendingFile && !fileRecipientsOpen) {
+                                                                    setFileRecipientsHover(null)
+                                                                }
+                                                            }}
+                                                            onPointerDownOutside={() => {
+                                                                setFileRecipientsOpen(null);
+                                                                setFileRecipientsHover(null)
+                                                            }}
+                                                            open={fileRecipientsHover?.id === file.id || fileRecipientsOpen?.id === file.id}
+                                                            disabled={!!pendingFile && pendingFile.id === file.id}
                                                         >
-                                                            No recipients
-                                                        </Badge>
-                                                    )}
+                                                            <Select.HiddenSelect />
+                                                            <Select.Label mb={0}><Text
+                                                                fontSize="xs"
+                                                                fontWeight="md"
+                                                                color="fg.muted"
+                                                                textTransform="uppercase"
+                                                                mb={0}
+                                                            >
+                                                                Recipients
+                                                            </Text></Select.Label>
+                                                            <Select.Control>
+                                                                <Select.Trigger
+                                                                    p={0}
+                                                                    borderColor="transparent"
+                                                                    _hover={{ borderColor: "fg.muted", cursor: "pointer" }}
+                                                                >
+                                                                    <Select.ValueText placeholder="No recipients">
+                                                                        <HStack gap="2">
+                                                                            {file.recipients.length === 0 ? (
+                                                                                <Badge
+                                                                                    px={0}
+                                                                                    py={0}
+                                                                                    borderRadius="sm"
+                                                                                    fontSize="sm"
+                                                                                    bg={"transparent"}
+                                                                                >
+                                                                                    No recipients
+                                                                                </Badge>
+                                                                            ) : (
+                                                                                <>
+                                                                                    {file.recipients.slice(0, 2).map((recipient, index) => (
+                                                                                        <Badge
+                                                                                            key={index}
+                                                                                            borderRadius="sm"
+                                                                                            fontSize="sm"
+                                                                                            px={2.5}
+                                                                                            py={1}
+                                                                                        >
+                                                                                            {recipient.fullName}
+                                                                                        </Badge>
+                                                                                    ))}
+                                                                                    {file.recipients.length > 2 && (
+                                                                                        <Badge
+                                                                                            borderRadius="sm"
+                                                                                            fontSize="sm"
+                                                                                            colorPalette="blue"
+                                                                                        >
+                                                                                            +{file.recipients.length - 2}
+                                                                                        </Badge>
+                                                                                    )}
+                                                                                </>
+                                                                            )}
+                                                                        </HStack>
+                                                                    </Select.ValueText>
+                                                                </Select.Trigger>
+                                                                <Select.IndicatorGroup>
+
+                                                                </Select.IndicatorGroup>
+                                                            </Select.Control>
+                                                            <Portal >
+                                                                <Select.Positioner>
+                                                                    <Select.Content>
+                                                                        {recipients.map((recipient) => (
+                                                                            <Select.Item item={recipient} key={recipient.id} justifyContent="flex-start">
+                                                                                <Select.ItemIndicator />
+                                                                                <Badge
+                                                                                    borderRadius="sm"
+                                                                                    fontSize="sm"
+                                                                                    px={2.5}
+                                                                                    py={1}
+                                                                                >
+                                                                                    {recipient.fullName}
+                                                                                </Badge>
+                                                                            </Select.Item>
+                                                                        ))}
+                                                                    </Select.Content>
+                                                                </Select.Positioner>
+                                                            </Portal>
+                                                        </Select.Root>
+                                                    </>
                                                 </Box>
 
                                                 {/* Actions */}
