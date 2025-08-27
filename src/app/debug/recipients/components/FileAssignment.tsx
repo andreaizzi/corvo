@@ -59,8 +59,8 @@ export default function FileAssignment({ recipientId }: FileAssignmentProps) {
             if (file) {
                 // We'll need to fetch the full file data to get the salt
                 try {
-                    const fileData = await utils.vault.getFile.fetch({ id: fileId });
-                    const salt = new Uint8Array(base64ToArrayBuffer(fileData.keyDerivationSalt!));
+                    // const fileData = await utils.vault.getFile.fetch({ id: fileId });
+                    const salt = new Uint8Array(base64ToArrayBuffer(file.keyDerivationSalt));
                     setFileSalt(salt);
                     setShowPasswordPrompt(true);
                 } catch (err) {
