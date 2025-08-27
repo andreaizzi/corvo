@@ -10,7 +10,7 @@ interface RecipientEmailData {
 
 export async function sendRecipientNotificationEmail(data: RecipientEmailData): Promise<void> {
     const baseUrl = process.env.NEXT_PUBLIC_URL ?? 'http://localhost:3000';
-    const accessUrl = `${baseUrl}/access`;
+    const accessUrl = `${baseUrl}/debug/access`;
 
     // In production, replace this with actual email sending logic
     console.log('=== EMAIL NOTIFICATION ===');
