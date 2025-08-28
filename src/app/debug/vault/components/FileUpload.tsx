@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { api } from "~/trpc/react";
-import { clientEncryption, generateRandomBytes, arrayBufferToBase64, ENCRYPTION_CONFIG } from "~/lib/encryption/encryption";
+import { clientEncryption, generateRandomBytes, arrayBufferToBase64, ENCRYPTION_CONFIG, base64ToArrayBuffer } from "~/lib/encryption/encryption";
 import { useEncryption } from "~/lib/encryption/EncryptionContext";
 import PasswordPrompt from "./PasswordPrompt";
 
@@ -18,8 +18,18 @@ export default function FileUpload({ categoryId, onUploadComplete }: FileUploadP
     const [title, setTitle] = useState("");
     const [description, setDescription] = useState("");
     const [error, setError] = useState("");
+    const [userSalt, setUserSalt] = useState<Uint8Array | null>(null);
 
     const { getKey } = useEncryption();
+
+    // Get user salt on component mount
+    const { data: userSaltBase64 } = api.vault.getUserSalt.useQuery();
+
+    useEffect(() => {
+        if (userSaltBase64) {
+            setUserSalt(new Uint8Array(base64ToArrayBuffer(userSaltBase64)));
+        }
+    }, [userSaltBase64]);
 
     const createFile = api.vault.createFile.useMutation({
         onSuccess: () => {
@@ -79,7 +89,6 @@ export default function FileUpload({ categoryId, onUploadComplete }: FileUploadP
             // Convert to base64 for transmission
             const encryptedBase64 = arrayBufferToBase64(encryptedData);
             const wrappedKeyBase64 = arrayBufferToBase64(wrappedKey);
-            const saltBase64 = arrayBufferToBase64(salt.buffer);
             const ivBase64 = arrayBufferToBase64(iv.buffer);
             const wrapIvBase64 = arrayBufferToBase64(wrapIv.buffer);
 
@@ -97,7 +106,6 @@ export default function FileUpload({ categoryId, onUploadComplete }: FileUploadP
                 encryptedData: encryptedBase64,
                 encryptionIv,
                 wrappedKeyUser: wrappedKeyBase64,
-                keyDerivationSalt: saltBase64,
             });
         } catch (err) {
             console.error("Encryption error:", err);
@@ -178,10 +186,12 @@ export default function FileUpload({ categoryId, onUploadComplete }: FileUploadP
                 </button>
             </div>
 
-            {showPasswordPrompt && (
+            {showPasswordPrompt && userSalt && (
                 <PasswordPrompt
+                    // isOpen={showPasswordPrompt}
                     onPasswordVerified={handlePasswordVerified}
                     onCancel={() => setShowPasswordPrompt(false)}
+                    salt={userSalt}
                 />
             )}
         </div>

@@ -58,6 +58,7 @@ export const users = createTable(
     // NextAuth compatibility fields
     name: varchar("name", { length: 255 }),
     image: varchar("image", { length: 255 }),
+    keyDerivationSalt: text("key_derivation_salt"),
   },
   (t) => [
     index("idx_users_email").on(t.email),
@@ -269,7 +270,6 @@ export const vaultItems = createTable(
     encryptionAlgorithm: varchar("encryption_algorithm", { length: 50 }).default("AES-256-GCM"),
     encryptionIv: text("encryption_iv").notNull(),
     wrappedKeyUser: text("wrapped_key_user").notNull(),
-    keyDerivationSalt: text("key_derivation_salt").notNull(),
 
     metadata: jsonb("metadata"),
     isFavorite: boolean("is_favorite").default(false).notNull(),

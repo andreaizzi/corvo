@@ -8,7 +8,8 @@ import {
     Stack,
     Text,
 } from "@chakra-ui/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { base64ToArrayBuffer } from "~/lib/encryption/encryption";
 import { useEncryption } from "~/lib/encryption/EncryptionContext";
 import { api } from "~/trpc/react";
 
@@ -16,32 +17,54 @@ interface PasswordPromptDialogProps {
     isOpen: boolean;
     onPasswordVerified: () => void;
     onCloseAction: () => void;
-    salt?: Uint8Array;
 }
 
 export default function PasswordPromptDialog({
     isOpen,
     onPasswordVerified,
     onCloseAction,
-    salt
 }: PasswordPromptDialogProps) {
     const [password, setPassword] = useState("");
     const [error, setError] = useState("");
+    const [loading, setLoading] = useState(false);
+    const [userSalt, setUserSalt] = useState<Uint8Array | null>(null);
+
     const { deriveAndStoreKey } = useEncryption();
+
+    const { data: userSaltBase64, isLoading: saltLoading } = api.vault.getUserSalt.useQuery(
+        undefined,
+        {
+            enabled: isOpen,
+        }
+    );
+
+    useEffect(() => {
+        if (userSaltBase64) {
+            setUserSalt(new Uint8Array(base64ToArrayBuffer(userSaltBase64)));
+        }
+    }, [userSaltBase64]);
 
     const verifyPassword = api.vault.verifyPassword.useMutation({
         onSuccess: async () => {
+            if (!userSalt) {
+                setError("User encryption salt not available");
+                setLoading(false);
+                return;
+            }
+
             try {
-                // Derive and store the key in memory
-                // Use provided salt if decrypting existing files
-                await deriveAndStoreKey(password, salt);
+                await deriveAndStoreKey(password, userSalt);
+                setLoading(false);
                 onPasswordVerified();
+                setPassword(""); // Clear password from memory
             } catch (err) {
                 setError("Failed to derive encryption key");
+                setLoading(false);
             }
         },
         onError: () => {
             setError("Invalid password");
+            setLoading(false);
         },
     });
 
@@ -90,6 +113,7 @@ export default function PasswordPromptDialog({
                                             onChange={(e) => setPassword(e.target.value)}
                                             placeholder="Enter your password"
                                             size="md"
+                                            disabled={loading || saltLoading}
                                             autoFocus
                                         />
                                         {error && (
@@ -98,6 +122,11 @@ export default function PasswordPromptDialog({
                                             </Field.ErrorText>
                                         )}
                                     </Field.Root>
+                                    {saltLoading && (
+                                        <div>
+                                            Loading encryption settings...
+                                        </div>
+                                    )}
                                 </Stack>
                             </form>
 
@@ -124,9 +153,10 @@ export default function PasswordPromptDialog({
                                 loading={verifyPassword.isPending}
                                 loadingText="Verifying..."
                                 flex={1}
+                                disabled={loading || saltLoading || !userSalt}
                                 colorPalette="blue"
                             >
-                                Unlock Vault
+                                {loading ? "Verifying..." : "Unlock Vault"}
                             </Button>
                         </Stack>
                     </Dialog.Footer>

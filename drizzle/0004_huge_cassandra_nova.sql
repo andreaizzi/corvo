@@ -1,0 +1,1 @@
+ALTER TABLE "corvo_user" ADD COLUMN "key_derivation_salt" text;

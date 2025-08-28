@@ -29,6 +29,20 @@
       "when": 1756143714656,
       "tag": "0003_known_sandman",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1756329796232,
+      "tag": "0004_huge_cassandra_nova",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1756331997775,
+      "tag": "0005_peaceful_thunderbolt",
+      "breakpoints": true
     }
   ]
 }

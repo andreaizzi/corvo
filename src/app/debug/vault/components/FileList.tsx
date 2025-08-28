@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "~/trpc/react";
 import PasswordPrompt from "./PasswordPrompt";
 import { useEncryption } from "~/lib/encryption/EncryptionContext";
@@ -13,12 +13,23 @@ interface FileListProps {
 export default function FileList({ categoryId }: FileListProps) {
     const [showPasswordPrompt, setShowPasswordPrompt] = useState(false);
     const [downloadingFile, setDownloadingFile] = useState<string | null>(null);
-    const [fileSalt, setFileSalt] = useState<Uint8Array | null>(null);
     const [editingFile, setEditingFile] = useState<string | null>(null);
     const [editTitle, setEditTitle] = useState("");
     const [editDescription, setEditDescription] = useState("");
 
+    const [userSalt, setUserSalt] = useState<Uint8Array | null>(null);
+
     const { getKey } = useEncryption();
+
+
+    const { data: userSaltBase64 } = api.vault.getUserSalt.useQuery();
+
+    useEffect(() => {
+        if (userSaltBase64) {
+            setUserSalt(new Uint8Array(base64ToArrayBuffer(userSaltBase64)));
+        }
+    }, [userSaltBase64]);
+
     const utils = api.useUtils();
 
     const { data: files, refetch } = api.vault.getFiles.useQuery({ categoryId });
@@ -90,24 +101,14 @@ export default function FileList({ categoryId }: FileListProps) {
 
     const handleDownload = async (fileId: string) => {
         const keyData = getKey();
-        if (!keyData) {
-            // We need to get the salt from the file first
+        if (!keyData && userSalt) {
             setDownloadingFile(fileId);
-
-            try {
-                // Get file metadata including salt using tRPC utils
-                const fileMetadata = await utils.vault.getFile.fetch({ id: fileId });
-                const salt = new Uint8Array(base64ToArrayBuffer(fileMetadata.keyDerivationSalt));
-                setFileSalt(salt);
-                setShowPasswordPrompt(true);
-            } catch (err) {
-                console.error("Failed to get file metadata:", err);
-                setDownloadingFile(null);
-            }
-        } else {
-            // Key is already cached, proceed with download
+            setShowPasswordPrompt(true);
+        } else if (keyData) {
             setDownloadingFile(fileId);
             void decryptAndDownload(fileId);
+        } else {
+            alert("User encryption salt not initialized. Please refresh the page.");
         }
     };
 
@@ -142,7 +143,6 @@ export default function FileList({ categoryId }: FileListProps) {
 
     const handlePasswordVerified = () => {
         setShowPasswordPrompt(false);
-        setFileSalt(null);
         if (downloadingFile) {
             decryptAndDownload(downloadingFile);
         }
@@ -255,15 +255,14 @@ export default function FileList({ categoryId }: FileListProps) {
                 </div>
             </div>
 
-            {showPasswordPrompt && (
+            {showPasswordPrompt && userSalt && (
                 <PasswordPrompt
                     onPasswordVerified={handlePasswordVerified}
                     onCancel={() => {
                         setShowPasswordPrompt(false);
                         setDownloadingFile(null);
-                        setFileSalt(null);
                     }}
-                    salt={fileSalt || undefined}
+                    salt={userSalt}
                 />
             )}
         </div>

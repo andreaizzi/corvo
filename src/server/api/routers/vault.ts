@@ -4,6 +4,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import * as fs from "fs/promises";
 import * as path from "path";
 import { z } from "zod";
+import { arrayBufferToBase64, ENCRYPTION_CONFIG, generateRandomBytes } from "~/lib/encryption/encryption";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import { categories, users, vaultItems } from "~/server/db/schema";
 
@@ -18,6 +19,37 @@ async function ensureStorageDir(userId: string) {
 }
 
 export const vaultRouter = createTRPCRouter({
+    getUserSalt: protectedProcedure
+        .query(async ({ ctx }) => {
+            const userId = ctx.session.user.id;
+
+            const user = await ctx.db.query.users.findFirst({
+                where: eq(users.id, userId),
+            });
+
+            if (!user) {
+                throw new TRPCError({
+                    code: "NOT_FOUND",
+                    message: "User not found",
+                });
+            }
+
+            // If user doesn't have a salt yet, generate one
+            if (!user.keyDerivationSalt) {
+                const salt = generateRandomBytes(ENCRYPTION_CONFIG.saltLength);
+                const saltBase64 = arrayBufferToBase64(salt.buffer as ArrayBuffer);
+
+                await ctx.db
+                    .update(users)
+                    .set({ keyDerivationSalt: saltBase64 })
+                    .where(eq(users.id, userId));
+
+                return saltBase64;
+            }
+
+            return user.keyDerivationSalt;
+        }),
+
     // Create a new vault item (file upload)
     createFile: protectedProcedure
         .input(
@@ -31,7 +63,6 @@ export const vaultRouter = createTRPCRouter({
                 encryptedData: z.string(), // Base64 encoded encrypted file
                 encryptionIv: z.string(),
                 wrappedKeyUser: z.string(),
-                keyDerivationSalt: z.string(),
             })
         )
         .mutation(async ({ ctx, input }) => {
@@ -52,11 +83,10 @@ export const vaultRouter = createTRPCRouter({
                     fileName: input.fileName,
                     fileSize: input.fileSize,
                     fileType: input.fileType,
-                    filePath: "", // Set the file path after getting the id
+                    filePath: "", // Will be updated after file is saved
                     encryptionAlgorithm: "AES-256-GCM",
                     encryptionIv: input.encryptionIv,
                     wrappedKeyUser: input.wrappedKeyUser,
-                    keyDerivationSalt: input.keyDerivationSalt,
                 })
                 .returning();
 
@@ -69,8 +99,6 @@ export const vaultRouter = createTRPCRouter({
 
             // Save encrypted file to disk
             const filePath = path.join(userDir, `${vaultItem.id}.enc`);
-
-            // Convert base64 to buffer and save
             const encryptedBuffer = Buffer.from(input.encryptedData, "base64");
             await fs.writeFile(filePath, encryptedBuffer);
 
@@ -80,13 +108,7 @@ export const vaultRouter = createTRPCRouter({
                 .set({ filePath })
                 .where(eq(vaultItems.id, vaultItem.id));
 
-            return {
-                id: vaultItem.id,
-                title: vaultItem.title,
-                fileName: vaultItem.fileName,
-                fileSize: vaultItem.fileSize,
-                createdAt: vaultItem.createdAt,
-            };
+            return { ...vaultItem, filePath };
         }),
 
     // Get all vault items for the user
@@ -98,6 +120,11 @@ export const vaultRouter = createTRPCRouter({
         )
         .query(async ({ ctx, input }) => {
             const userId = ctx.session.user.id;
+
+            const user = await ctx.db.query.users.findFirst({
+                where: eq(users.id, userId),
+                columns: { keyDerivationSalt: true },
+            });
 
             const conditions = [
                 eq(vaultItems.userId, userId),
@@ -127,6 +154,7 @@ export const vaultRouter = createTRPCRouter({
 
             return files.map((file) => ({
                 ...file,
+                keyDerivationSalt: user?.keyDerivationSalt ?? "",
                 recipients: file.recipientFileKeys.map((fileKey) => ({
                     id: fileKey.accessCode.recipient.id,
                     email: fileKey.accessCode.recipient.email,
@@ -144,6 +172,11 @@ export const vaultRouter = createTRPCRouter({
         .input(z.object({ id: z.string().uuid() }))
         .query(async ({ ctx, input }) => {
             const userId = ctx.session.user.id;
+
+            const user = await ctx.db.query.users.findFirst({
+                where: eq(users.id, userId),
+                columns: { keyDerivationSalt: true },
+            });
 
             const file = await ctx.db.query.vaultItems.findFirst({
                 where: and(
@@ -173,7 +206,10 @@ export const vaultRouter = createTRPCRouter({
                 keyDerivationSalt: file.keyDerivationSalt,
             }; */
 
-            return file;
+            return {
+                ...file,
+                keyDerivationSalt: user?.keyDerivationSalt ?? ""
+            };
         }),
 
     // Download file (get encrypted content)
@@ -181,6 +217,11 @@ export const vaultRouter = createTRPCRouter({
         .input(z.object({ id: z.string().uuid() }))
         .mutation(async ({ ctx, input }) => {
             const userId = ctx.session.user.id;
+
+            const user = await ctx.db.query.users.findFirst({
+                where: eq(users.id, userId),
+                columns: { keyDerivationSalt: true },
+            });
 
             const file = await ctx.db.query.vaultItems.findFirst({
                 where: and(
@@ -215,7 +256,7 @@ export const vaultRouter = createTRPCRouter({
                     fileType: file.fileType,
                     encryptionIv: file.encryptionIv,
                     wrappedKeyUser: file.wrappedKeyUser,
-                    keyDerivationSalt: file.keyDerivationSalt,
+                    keyDerivationSalt: user?.keyDerivationSalt ?? ""
                 };
             } catch {
                 throw new TRPCError({

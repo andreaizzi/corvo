@@ -17,6 +17,7 @@ import {
     InputGroup,
     Portal,
     Select,
+    Spinner,
     Stack,
     Text
 } from "@chakra-ui/react";
@@ -51,18 +52,15 @@ export default function VaultPage() {
     const [selectedRecipientId, setSelectedRecipientId] = useState<string | null>(null);
     const [fileRecipientsHover, setFileRecipientsHover] = useState<VaultFile | null>(null); // flag to know when the user hovers on the recipients select field for a single file.
     const [fileRecipientsOpen, setFileRecipientsOpen] = useState<VaultFile | null>(null); // flag to know when the user has clicked on the recipients select field for a single file.
-    const [fileSalt, setFileSalt] = useState<Uint8Array | null>(null);
 
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [showPasswordDialog, setShowPasswordDialog] = useState(false);
     const { getKey } = useEncryption();
 
-    // In production, these would be tRPC queries
-    const { data: files, refetch } = api.vault.getFiles.useQuery({/* categoryId: selectedCategory */ });
+    const { data: files, isLoading: filesLoading, refetch } = api.vault.getFiles.useQuery({/* categoryId: selectedCategory */ });
     // const { data: categories } = api.vault.getCategories.useQuery();
     const downloadFile = api.vault.downloadFile.useMutation();
-    // get all recipients available
-    const { data: recipients } = api.recipients.getAll.useQuery();
+    const { data: recipients, isLoading: recipientsLoading } = api.recipients.getAll.useQuery();
 
     const assignFile = api.recipients.assignFileWithKey.useMutation({
         onSuccess: () => {
@@ -165,57 +163,40 @@ export default function VaultPage() {
     const handleDownload = async (file: VaultFile) => {
         const keyData = getKey();
         if (!keyData) {
-            // We need to get the salt from the file first
             setDownloadingFile(file);
-
-            try {
-                // Get file metadata including salt using tRPC utils
-                // const file = await api.vault.getFile.query({ id: fileId });
-                const salt = new Uint8Array(base64ToArrayBuffer(file.keyDerivationSalt));
-                setFileSalt(salt);
-                setShowPasswordDialog(true);
-            } catch (err) {
-                console.error("Failed to get file metadata:", err);
-                setDownloadingFile(null);
-            }
-        } else {
+            setShowPasswordDialog(true);
+        } else if (keyData) {
             // Key is already cached, proceed with download
             setDownloadingFile(file);
             await decryptAndDownload(file);
+        } else {
+            alert("User encryption salt not initialized. Please refresh the page.");
         }
     };
 
     const handlePasswordVerified = () => {
         setShowPasswordDialog(false);
-        setFileSalt(null);
         if (downloadingFile) {
             void decryptAndDownload(downloadingFile);
         }
         if (pendingFile && selectedRecipientId) {
-            // If there is a pending file for assignment, proceed with assignment
             void processFileAssignment(pendingFile, selectedRecipientId);
         }
     };
 
     const handleAssign = async (file: VaultFile, event: SelectionDetails) => {
         setPendingFile(file);
-        const selectedId = event.value;
-        const isAssigned = file.recipients.some(r => r.id === selectedId);
+        setSelectedRecipientId(event.value);
+        const isAssigned = file.recipients.some(r => r.id === event.value);
+
         if (isAssigned) {
-            unassignFile.mutate({ fileId: file.id, recipientId: selectedId });
+            unassignFile.mutate({ fileId: file.id, recipientId: event.value });
         } else {
             const keyData = getKey();
-            if (!keyData) {
-                try {
-                    const salt = new Uint8Array(base64ToArrayBuffer(file.keyDerivationSalt));
-                    setFileSalt(salt);
-                    setShowPasswordDialog(true);
-                } catch (err) {
-                    console.error("Failed to get file metadata:", err);
-                    setDownloadingFile(null);
-                }
+            if (keyData) {
+                await processFileAssignment(file, event.value);
             } else {
-                await processFileAssignment(file, selectedId);
+                setShowPasswordDialog(true);
             }
         }
     };
@@ -293,12 +274,13 @@ export default function VaultPage() {
                         ))}
                     </Flex>
 
-                    {!files || !recipients ? <div>Loading... </div> : (
-                        files.length === 0 ? (
-                            <div className="p-6 rounded-lg shadow text-center text-gray-500">
-                                No files found
-                            </div>
-                        ) :
+                    {filesLoading || recipientsLoading || !recipients ? (
+                        <div>Loading...</div>
+                    ) : !files || files.length === 0 ? (
+                        <div>
+                            No files found
+                        </div>
+                    ) : (
                             <Grid
                                 templateColumns={{
                                     base: "1fr",
@@ -357,7 +339,7 @@ export default function VaultPage() {
                                                             })}
                                                             size="sm"
                                                             defaultValue={file.recipients.map(r => r.id)}
-                                                            positioning={{ sameWidth: true }}
+                                                            positioning={{ sameWidth: true, slide: true, offset: { mainAxis: 0 } }}
                                                             onSelect={async (e) => {
                                                                 setSelectedRecipientId(e.value);
                                                                 await handleAssign(file, e);
@@ -372,7 +354,7 @@ export default function VaultPage() {
                                                             onMouseOver={() => {
                                                                 setFileRecipientsHover(file)
                                                             }}
-                                                            onMouseOut={() => {
+                                                            onMouseOut={async () => {
                                                                 if (!pendingFile && !fileRecipientsOpen) {
                                                                     setFileRecipientsHover(null)
                                                                 }
@@ -443,8 +425,8 @@ export default function VaultPage() {
 
                                                                 </Select.IndicatorGroup>
                                                             </Select.Control>
-                                                            <Portal >
-                                                                <Select.Positioner>
+                                                            <Portal>
+                                                                <Select.Positioner top={"-50px"}>
                                                                     <Select.Content>
                                                                         {recipients.map((recipient) => (
                                                                             <Select.Item item={recipient} key={recipient.id} justifyContent="flex-start">
@@ -501,7 +483,7 @@ export default function VaultPage() {
                                                             void handleDownload(file);
                                                         }}
                                                         disabled={downloadingFile === file}
-                                                    > <LuDownload /> </IconButton>
+                                                    > {downloadingFile === file ? <Spinner size="sm" /> : <LuDownload /> } </IconButton>
                                                 </Flex>
                                             </Stack>
                                         </Card.Body>
@@ -528,18 +510,15 @@ export default function VaultPage() {
             )}
 
             {/* Password Prompt Dialog */}
-            {fileSalt && (
+            {showPasswordDialog && (
                 <PasswordPromptDialog
                     isOpen={showPasswordDialog}
-                    onPasswordVerified={() => {
-                        handlePasswordVerified();
-                    }}
+                    onPasswordVerified={handlePasswordVerified}
                     onCloseAction={() => {
-                        setShowPasswordDialog(false)
-                        setFileSalt(null);
+                        setShowPasswordDialog(false);
                         setDownloadingFile(null);
+                        setPendingFile(null);
                     }}
-                    salt={fileSalt}
                 />
             )}
         </Box>
