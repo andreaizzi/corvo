@@ -119,7 +119,8 @@ export const triggerRouter = createTRPCRouter({
                         message: input.testMode
                             ? "Activated (email not sent - test mode)"
                             : "Activated and email sent",
-                        accessUrl: `${process.env.NEXT_PUBLIC_URL ?? 'http://localhost:3000'}/access/${accessCode}`,
+                        accessUrl: `${process.env.NEXT_PUBLIC_URL ?? 'http://localhost:3000'}/vault/access`,
+                        accessCode,
                     });
                 } catch (error) {
                     console.error(`Failed to activate recipient ${recipient.id}:`, error);
