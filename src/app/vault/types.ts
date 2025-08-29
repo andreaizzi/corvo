@@ -5,6 +5,7 @@ import type { AppRouter } from "~/server/api/root";
 
 type RouterOutput = inferRouterOutputs<AppRouter>;
 export type VaultFile = RouterOutput['vault']['getFiles'][number];
+export type Recipient = RouterOutput['recipients']['getAll'][number];
 // getFiles returns an array. so we use [number] to get a single file type
 
 export interface VaultItem {
@@ -16,32 +17,32 @@ export interface VaultItem {
     title: string;
     description?: string;
     contentEncrypted?: string; // For notes/messages
-    
+
     // File-specific fields
     fileName?: string;
     fileSize?: number;
     fileType?: string;
     filePath?: string;
     thumbnailPath?: string;
-    
+
     // Encryption fields
     encryptionAlgorithm?: string;
     encryptionIv?: string;
     wrappedKeyUser?: string;
     keyDerivationSalt?: string;
-    
+
     // Metadata and tracking
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     metadata?: Record<string, any>;
     isFavorite: boolean;
     recipientAccessCount: number;
     lastAccessedAt?: Date;
-    
+
     // Timestamps
     createdAt: Date;
     updatedAt: Date;
     deletedAt?: Date;
-    
+
     // Additional display fields (not from DB, populated via relations)
     recipients?: Recipient[];
     tags?: Tag[];
@@ -69,21 +70,21 @@ export interface Tag {
     createdAt: Date;
 }
 
-export interface Recipient {
+/* export interface Recipient {
     id: string;
     userId: string;
     email: string;
     fullName: string;
     phoneNumber?: string;
     relationship?: string;
-    verificationRequired: boolean;
+    verificationRequired?: boolean;
     verificationCode?: string;
     isVerified: boolean;
     verifiedAt?: Date;
     notes?: string;
     createdAt: Date;
     updatedAt: Date;
-}
+} */
 
 export interface RecipientPermission {
     id: string;
