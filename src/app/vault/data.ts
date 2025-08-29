@@ -1,4 +1,4 @@
-import type { VaultItem } from "./type";
+import type { VaultItem } from "./types";
 
 export const mockVaultItems: VaultItem[] = [
     {
