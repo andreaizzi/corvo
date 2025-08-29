@@ -19,7 +19,7 @@ interface PasswordPromptDialogProps {
     onCloseAction: () => void;
 }
 
-export default function PasswordPromptDialog({
+export function PasswordPromptDialog({
     isOpen,
     onPasswordVerified,
     onCloseAction,

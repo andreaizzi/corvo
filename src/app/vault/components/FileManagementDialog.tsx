@@ -31,7 +31,7 @@ import {
     LuUsers,
 } from "react-icons/lu";
 import { api } from "~/trpc/react";
-import type { VaultFile } from "../type";
+import type { VaultFile } from "../types";
 import { formatDate, formatFileSize, getFileIcon } from "../utils";
 
 function CopyButton({ text, ariaLabel = "Copy" }: { text?: string; ariaLabel?: string }) {
@@ -68,7 +68,7 @@ function GreyLabel({ children }: { children: React.ReactNode }) {
     );
 }
 
-export default function FileManagementDialog({
+export function FileManagementDialog({
     file,
     downloadingFile,
     isOpen,
