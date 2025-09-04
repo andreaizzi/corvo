@@ -1,13 +1,12 @@
 import { Box, Button, CloseButton, Dialog, Field, FileUpload, Flex, Icon, Input, Portal, Spinner, Stack } from '@chakra-ui/react';
 import React from 'react';
 import { LuUpload } from 'react-icons/lu';
-import type { Recipient } from '../types';
 
 interface UploadFileDialogProps {
     fileName: string;
     fileDescription: string;
     uploadedFile: File | null;
-    recipients: Recipient[] | undefined;
+    // recipients: Recipient[] | undefined;
     isUploading: boolean;
     isOpen: boolean;
     // isPending: boolean;

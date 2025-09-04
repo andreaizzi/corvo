@@ -1,6 +1,6 @@
 "use client";
 
-import { Box, Button, Container, Stack } from "@chakra-ui/react";
+import { Box, Container, Stack } from "@chakra-ui/react";
 import { useState } from "react";
 import { api } from "~/trpc/react";
 import { FileManagementDialog, PasswordPromptDialog, UploadFileDialog } from "./components";
@@ -155,7 +155,6 @@ export default function VaultPage() {
                     setFileName={setFileName}
                     setFileDescription={setFileDescription}
                     setUploadedFile={setUploadedFile}
-                    recipients={recipients}
                     onUpload={async () => {
                         await handleUpload(uploadedFile!, setOpenPasswordDialog);
                     }}
