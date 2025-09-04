@@ -12,13 +12,13 @@ import type { SelectionDetails } from "node_modules/@chakra-ui/react/dist/types/
 
 interface UseRecipientAssignmentProps {
     refetch: () => void;
-    setShowPasswordDialog: (show: boolean) => void;
+    setOpenPasswordDialog: (show: boolean) => void;
     // handlePasswordVerified: () => void;
 }
 
 export function useRecipientAssignment({
     refetch,
-    setShowPasswordDialog,
+    setOpenPasswordDialog,
 }: UseRecipientAssignmentProps) {
     const [pendingFile, setPendingFile] = useState<VaultFile | null>(null);
     const [selectedRecipientId, setSelectedRecipientId] = useState<string | null>(null);
@@ -88,7 +88,7 @@ export function useRecipientAssignment({
             if (keyData) {
                 await processFileAssignment(file, recipientId);
             } else {
-                setShowPasswordDialog(true);
+                setOpenPasswordDialog(true);
             }
         }
     };
