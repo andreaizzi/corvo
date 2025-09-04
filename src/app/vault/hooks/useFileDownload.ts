@@ -2,7 +2,6 @@
 import { useState } from "react";
 import { useEncryption } from "~/lib/encryption/EncryptionContext";
 import {
-    arrayBufferToBase64,
     base64ToArrayBuffer,
     clientEncryption,
 } from "~/lib/encryption/encryption";

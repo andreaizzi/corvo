@@ -9,3 +9,4 @@ export { LoadingState } from "./LoadingState";
 export { EmptyState } from "./EmptyState";
 export { FileManagementDialog } from "./FileManagementDialog";
 export { PasswordPromptDialog } from "./PasswordPromptDialog";
+export { UploadFileDialog } from "./UploadFileDialog";

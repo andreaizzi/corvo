@@ -1,24 +1,26 @@
 "use client";
 
-import { Box, Container, Stack } from "@chakra-ui/react";
+import { Box, Button, Container, Stack } from "@chakra-ui/react";
 import { useState } from "react";
 import { api } from "~/trpc/react";
-import { VaultHeader } from "./components/VaultHeader";
-import { SearchAndFilters } from "./components/SearchAndFilters";
+import { FileManagementDialog, PasswordPromptDialog, UploadFileDialog } from "./components";
 import { CategoryTabs } from "./components/CategoryTabs";
 import { FileGrid } from "./components/FileGrid";
-import { FileManagementDialog, PasswordPromptDialog } from "./components";
-import { useFileDownload, useRecipientAssignment } from "./hooks";
-import type { VaultFile } from "./types";
+import { SearchAndFilters } from "./components/SearchAndFilters";
+import { VaultHeader } from "./components/VaultHeader";
 import { categories } from "./data";
+import { useFileDownload, useRecipientAssignment } from "./hooks";
+import { useFileUpload } from "./hooks/useFileUpload";
+import type { VaultFile } from "./types";
 
 export default function VaultPage() {
     // State Management
     const [selectedCategory, setSelectedCategory] = useState("all");
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedFile, setSelectedFile] = useState<VaultFile | null>(null);
-    const [isDialogOpen, setIsDialogOpen] = useState(false);
-    const [showPasswordDialog, setShowPasswordDialog] = useState(false);
+    const [openFileDialog, setOpenFileDialog] = useState(false);
+    const [openUploadDialog, setOpenUploadDialog] = useState(false);
+    const [openPasswordDialog, setOpenPasswordDialog] = useState(false);
 
     // API Queries
     const { data: files, isLoading: filesLoading, refetch } = api.vault.getFiles.useQuery({});
@@ -33,6 +35,20 @@ export default function VaultPage() {
     } = useFileDownload();
 
     const {
+        uploadedFile,
+        setUploadedFile,
+        handleUpload,
+        isUploading,
+        fileName,
+        fileDescription,
+        setFileName,
+        setFileDescription
+    } = useFileUpload({
+        refetch: () => void refetch(),
+        setOpenUploadDialog: setOpenUploadDialog,
+    });
+
+    const {
         handleAssign,
         processFileAssignment,
         setPendingFile,
@@ -40,28 +56,35 @@ export default function VaultPage() {
         selectedRecipientId,
     } = useRecipientAssignment({
         refetch: () => void refetch(),
-        setShowPasswordDialog,
+        setOpenPasswordDialog: setOpenPasswordDialog,
     });
 
     // Event Handlers
     const handleFileClick = (file: VaultFile) => {
         setSelectedFile(file);
-        setIsDialogOpen(true);
+        setOpenFileDialog(true);
     };
 
     const handleCloseDialog = () => {
-        setIsDialogOpen(false);
+        setOpenFileDialog(false);
         setSelectedFile(null);
     };
 
     const handleClosePasswordDialog = () => {
-        setShowPasswordDialog(false);
+        setOpenPasswordDialog(false);
         setDownloadingFile(null);
         setPendingFile(null);
     };
 
+    const handleCloseUploadDialog = () => {
+        setOpenUploadDialog(false);
+        setUploadedFile(null);
+        setFileName("");
+        setFileDescription("");
+    };
+
     const handleDownloadClick = async (file: VaultFile) => {
-        await handleDownload(file, setShowPasswordDialog);
+        await handleDownload(file, setOpenPasswordDialog);
     };
 
     const handlePasswordVerified = () => {
@@ -71,6 +94,9 @@ export default function VaultPage() {
         if (pendingFile && selectedRecipientId) {
             void processFileAssignment(pendingFile, selectedRecipientId);
         }
+        if (isUploading && uploadedFile) {
+            void handleUpload(uploadedFile, setOpenPasswordDialog);
+        }
     };
 
     const isLoading = filesLoading || recipientsLoading;
@@ -79,7 +105,9 @@ export default function VaultPage() {
         <Box minH="100vh" bg="black">
             <Container p={{ base: 4, md: 6, lg: 8 }}>
                 <Stack gap={6}>
-                    <VaultHeader />
+                    <VaultHeader
+                        setOpenUploadDialog={setOpenUploadDialog}
+                    />
 
                     <SearchAndFilters
                         searchQuery={searchQuery}
@@ -109,18 +137,36 @@ export default function VaultPage() {
                 <FileManagementDialog
                     file={selectedFile}
                     downloadingFile={downloadingFile}
-                    isOpen={isDialogOpen}
+                    isOpen={openFileDialog}
                     handleDownload={() => handleDownloadClick(selectedFile)}
                     onCloseAction={handleCloseDialog}
                     refetch={refetch}
                 />
             )}
 
-            {showPasswordDialog && (
+            {openUploadDialog && (
+                <UploadFileDialog
+                    fileName={fileName}
+                    fileDescription={fileDescription}
+                    uploadedFile={uploadedFile}
+                    isUploading={isUploading}
+                    isOpen={openUploadDialog}
+                    onClose={handleCloseUploadDialog}
+                    setFileName={setFileName}
+                    setFileDescription={setFileDescription}
+                    setUploadedFile={setUploadedFile}
+                    recipients={recipients}
+                    onUpload={async () => {
+                        await handleUpload(uploadedFile!, setOpenPasswordDialog);
+                    }}
+                />
+            )}
+
+            {openPasswordDialog && (
                 <PasswordPromptDialog
-                    isOpen={showPasswordDialog}
+                    isOpen={openPasswordDialog}
                     onPasswordVerified={() => {
-                        setShowPasswordDialog(false);
+                        setOpenPasswordDialog(false);
                         handlePasswordVerified();
                     }}
                     onCloseAction={handleClosePasswordDialog}

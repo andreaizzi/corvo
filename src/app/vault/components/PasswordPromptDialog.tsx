@@ -5,6 +5,7 @@ import {
     Dialog,
     Field,
     Input,
+    Portal,
     Stack,
     Text,
 } from "@chakra-ui/react";
@@ -82,21 +83,22 @@ export function PasswordPromptDialog({
 
     return (
         <Dialog.Root open={isOpen} onOpenChange={handleClose} size="md">
-            <Dialog.Backdrop />
-            <Dialog.Positioner>
-                <Dialog.Content borderRadius="md" overflow="hidden">
-                    {/* Header */}
-                    <Dialog.Header p={6} pb={4}>
-                        <Dialog.Title>
-                            <Text fontSize="xl" fontWeight="bold" color="neutral.50">
-                                Enter Your Password
-                            </Text>
-                        </Dialog.Title>
-                    </Dialog.Header>
+            <Portal>
+                <Dialog.Backdrop />
+                <Dialog.Positioner style={{ zIndex: 1400 }}>
+                    <Dialog.Content borderRadius="md" overflow="hidden">
+                        {/* Header */}
+                        <Dialog.Header p={6} pb={4}>
+                            <Dialog.Title>
+                                <Text fontSize="xl" fontWeight="bold" color="neutral.50">
+                                    Enter Your Password
+                                </Text>
+                            </Dialog.Title>
+                        </Dialog.Header>
 
-                    {/* Body */}
-                    <Dialog.Body px={6} pb={4}>
-                        <Stack gap={4}>
+                        {/* Body */}
+                        <Dialog.Body px={6} pb={4}>
+                            <Stack gap={4}>
                             <Text fontSize="md" color="fg.muted">
                                 Your password is required to unlock encryption for this session.
                             </Text>
@@ -162,6 +164,7 @@ export function PasswordPromptDialog({
                     </Dialog.Footer>
                 </Dialog.Content>
             </Dialog.Positioner>
+            </Portal>
         </Dialog.Root>
     );
 }

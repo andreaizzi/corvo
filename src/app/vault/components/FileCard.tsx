@@ -66,7 +66,6 @@ export function FileCard({
                     />
 
                     <FileActions
-                        file={file}
                         isDownloading={isDownloading}
                         onManageClick={() => onFileClick(file)}
                         onViewClick={() => console.log("Preview", file.id)}
@@ -97,13 +96,11 @@ function FileHeader({ file }: { file: VaultFile }) {
 }
 
 function FileActions({
-    file,
     isDownloading,
     onManageClick,
     onViewClick,
     onDownloadClick,
 }: {
-    file: VaultFile;
     isDownloading: boolean;
     onManageClick: () => void;
     onViewClick: () => void;
