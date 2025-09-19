@@ -1,6 +1,6 @@
 import bcrypt from "bcryptjs";
 import { db } from "~/server/db";
-import { users, userPreferences } from "~/server/db/schema";
+import { users } from "~/server/db/schema";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 
