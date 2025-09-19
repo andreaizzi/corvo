@@ -25,7 +25,7 @@ export const enablePgcrypto = sql`CREATE EXTENSION IF NOT EXISTS "pgcrypto"`;
  *
  * @see https://orm.drizzle.team/docs/goodies#multi-project-schema
  */
-export const createTable = pgTableCreator((name) => `corvo_${name}`);
+export const createTable = pgTableCreator((name) => `${name}`);
 
 // =====================================================
 // USER MANAGEMENT SYSTEM
@@ -108,7 +108,7 @@ export const accounts = createTable(
 );
 
 // Email verification tokens
-export const emailVerificationTokens = createTable(
+/* export const emailVerificationTokens = createTable(
   "email_verification_token",
   {
     id: uuid("id").defaultRandom().primaryKey(),
@@ -122,10 +122,10 @@ export const emailVerificationTokens = createTable(
       .notNull(),
   },
   (t) => [index("idx_email_verification_token").on(t.token)]
-);
+); */
 
 // Password reset tokens
-export const passwordResetTokens = createTable(
+/* export const passwordResetTokens = createTable(
   "password_reset_token",
   {
     id: uuid("id").defaultRandom().primaryKey(),
@@ -140,9 +140,10 @@ export const passwordResetTokens = createTable(
       .notNull(),
   },
   (t) => [index("idx_password_reset_token").on(t.token)]
-);
+); */
 
 // User preferences
+/*
 export const userPreferences = createTable("user_preferences", {
   id: uuid("id").defaultRandom().primaryKey(),
   userId: uuid("user_id")
@@ -162,7 +163,7 @@ export const userPreferences = createTable("user_preferences", {
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .default(sql`CURRENT_TIMESTAMP`)
     .notNull(),
-});
+});*/
 
 // NextAuth verification tokens for magic links
 /* export const verificationTokens = createTable(
@@ -183,7 +184,7 @@ export const userPreferences = createTable("user_preferences", {
 // =====================================================
 
 // System configuration
-export const systemConfig = createTable("system_config", {
+/* export const systemConfig = createTable("system_config", {
   id: uuid("id").defaultRandom().primaryKey(),
   configKey: varchar("config_key", { length: 255 }).unique().notNull(),
   configValue: text("config_value").notNull(),
@@ -196,7 +197,7 @@ export const systemConfig = createTable("system_config", {
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .default(sql`CURRENT_TIMESTAMP`)
     .notNull(),
-});
+}); */
 
 // Categories table
 export const categories = createTable(
@@ -428,17 +429,17 @@ export const recipientAccessLogs = createTable(
 // =====================================================
 
 // User relations
-export const usersRelations = relations(users, ({ one, many }) => ({
+export const usersRelations = relations(users, ({ many }) => ({
   // One-to-many: User has many sessions
   // sessions: many(sessions),
   // One-to-many: User has many accounts (OAuth providers)
   accounts: many(accounts),
   // One-to-many: User has many email verification tokens
-  emailVerificationTokens: many(emailVerificationTokens),
+  // emailVerificationTokens: many(emailVerificationTokens),
   // One-to-many: User has many password reset tokens
-  passwordResetTokens: many(passwordResetTokens),
+  // passwordResetTokens: many(passwordResetTokens),
   // One-to-one: User has one user preferences
-  userPreferences: one(userPreferences),
+  // userPreferences: one(userPreferences),
   categories: many(categories),
   tags: many(tags),
   vaultItems: many(vaultItems),
@@ -464,31 +465,31 @@ export const accountsRelations = relations(accounts, ({ one }) => ({
 }));
 
 // Email verification token relations
-export const emailVerificationTokensRelations = relations(emailVerificationTokens, ({ one }) => ({
+/* export const emailVerificationTokensRelations = relations(emailVerificationTokens, ({ one }) => ({
   // Many-to-one: Token belongs to one user
   user: one(users, {
     fields: [emailVerificationTokens.userId],
     references: [users.id],
   }),
-}));
+})); */
 
 // Password reset token relations
-export const passwordResetTokensRelations = relations(passwordResetTokens, ({ one }) => ({
+/* export const passwordResetTokensRelations = relations(passwordResetTokens, ({ one }) => ({
   // Many-to-one: Token belongs to one user
   user: one(users, {
     fields: [passwordResetTokens.userId],
     references: [users.id],
   }),
-}));
+})); */
 
 // User preferences relations
-export const userPreferencesRelations = relations(userPreferences, ({ one }) => ({
+/* export const userPreferencesRelations = relations(userPreferences, ({ one }) => ({
   // One-to-one: Preferences belong to one user
   user: one(users, {
     fields: [userPreferences.userId],
     references: [users.id],
   }),
-}));
+})); */
 
 // Categories relations
 export const categoriesRelations = relations(categories, ({ one, many }) => ({
@@ -535,7 +536,7 @@ export const vaultItemTagsRelations = relations(vaultItemTags, ({ one }) => ({
 }));
 
 // Recipients relations
-export const recipientsRelations = relations(recipients, ({ one, many }) => ({
+export const recipientsRelations = relations(recipients, ({ one }) => ({
   user: one(users, {
     fields: [recipients.userId],
     references: [users.id],

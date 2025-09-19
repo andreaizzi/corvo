@@ -89,9 +89,9 @@ export async function createUser({
         }
 
         // Create default user preferences
-        await db.insert(userPreferences).values({
+        /* await db.insert(userPreferences).values({
             userId: newUser.id,
-        });
+        }); */
 
         // Create default check-in configuration
         /* await db.insert(checkInConfigs).values({
