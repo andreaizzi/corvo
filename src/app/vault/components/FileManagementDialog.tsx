@@ -6,6 +6,7 @@ import {
     Button,
     Card,
     CloseButton,
+    createListCollection,
     Dialog,
     Field,
     Flex,
@@ -15,10 +16,11 @@ import {
     IconButton,
     Input,
     InputGroup,
+    Select,
     Spinner,
     Stack,
     Tabs,
-    Text,
+    Text
 } from "@chakra-ui/react";
 import { useState } from "react";
 import {
@@ -31,8 +33,10 @@ import {
     LuUsers,
 } from "react-icons/lu";
 import { api } from "~/trpc/react";
-import type { VaultFile } from "../types";
+import type { Recipient, VaultFile } from "../types";
 import { formatDate, formatFileSize, getFileIcon } from "../utils";
+import { RecipientBadges } from "./RecipientSelector";
+import type { SelectionDetails } from "node_modules/@chakra-ui/react/dist/types/components/menu/namespace";
 
 function CopyButton({ text, ariaLabel = "Copy" }: { text?: string; ariaLabel?: string }) {
     const [copied, setCopied] = useState(false);
@@ -70,16 +74,20 @@ function GreyLabel({ children }: { children: React.ReactNode }) {
 
 export function FileManagementDialog({
     file,
+    recipients,
     downloadingFile,
     isOpen,
     handleDownload,
     onCloseAction,
-    refetch
+    refetch,
+    handleAssign
 }: {
     file: VaultFile;
+    recipients: Recipient[];
     downloadingFile: VaultFile | null;
     isOpen: boolean;
-    handleDownload: () => void;
+    handleDownload: (file: VaultFile) => void;
+    handleAssign: (file: VaultFile, event: SelectionDetails) => Promise<void>;
     onCloseAction: () => void;
     refetch: () => void;
 }) {
@@ -105,6 +113,15 @@ export function FileManagementDialog({
         onSuccess: () => {
             void refetch();
         }
+    });
+
+    const collection = createListCollection({
+        items: recipients.map((recipient) => ({
+            id: recipient.id,
+            name: recipient.fullName,
+        })),
+        itemToString: (item) => item.name,
+        itemToValue: (item) => item.id,
     });
 
     const handleSave = () => {
@@ -326,7 +343,7 @@ export function FileManagementDialog({
                                                     _hover={{ bg: "red.900/50" }}
                                                     size="md"
                                                     fontWeight="semibold"
-                                                    onClick={handleDownload}
+                                                    onClick={() => handleDownload(file)}
                                                     disabled={file === downloadingFile}
                                                 >
                                                     {file === downloadingFile ? <Spinner size="sm" /> : <LuDownload />}
@@ -353,6 +370,76 @@ export function FileManagementDialog({
                                         <Heading size="xl" color="neutral.50" fontWeight="semibold" mb={4}>
                                             Assigned Recipients
                                         </Heading>
+                                        <Select.Root
+                                            collection={collection}
+                                            size="sm"
+                                            defaultValue={file.recipients.map((r) => r.id)}
+                                            // positioning={{ sameWidth: true, slide: true, offset: { mainAxis: 0 } }}
+                                            onSelect={async (e) => {
+                                                await handleAssign(file, e);
+                                            }}
+                                            closeOnSelect={false}
+                                            // onClick={(e) => {
+                                            //     onOpen(file);
+                                            //     e.stopPropagation();
+                                            // }}
+                                            value={file.recipients.map((r) => r.id)}
+                                            gap={0}
+                                        // onOpenChange={(e) => setOpenRecipient(e.open)}
+                                        /* onMouseOver={() => onHover(file)}
+                                        onMouseOut={() => {
+                                            if (!isPending && !isOpen) {
+                                                onHover(null);
+                                            }
+                                        }}
+                                        onPointerDownOutside={() => {
+                                            onOpen(null);
+                                            onHover(null);
+                                        }} */
+                                        // open={isHovered || isOpen}
+                                        // disabled={isPending}
+                                        >
+                                            <Select.HiddenSelect />
+                                            <Select.Label mb={0}>
+                                                <Text
+                                                    fontSize="xs"
+                                                    fontWeight="md"
+                                                    color="fg.muted"
+                                                    textTransform="uppercase"
+                                                    mb={0}
+                                                >
+                                                    Recipients
+                                                </Text>
+                                            </Select.Label>
+                                            <Select.Control>
+                                                <Select.Trigger
+                                                    p={0}
+                                                    borderColor="transparent"
+                                                    _hover={{ borderColor: "fg.muted", cursor: "pointer" }}
+                                                >
+                                                    <Select.ValueText placeholder="No recipients">
+                                                        <RecipientBadges recipients={file.recipients} fontSize="md"/>
+                                                    </Select.ValueText>
+                                                </Select.Trigger>
+                                                <Select.IndicatorGroup />
+                                            </Select.Control>
+                                            <Select.Positioner top="-50px">
+                                                <Select.Content>
+                                                    {recipients.map((recipient) => (
+                                                        <Select.Item
+                                                            item={recipient}
+                                                            key={recipient.id}
+                                                            justifyContent="flex-start"
+                                                        >
+                                                            <Select.ItemIndicator />
+                                                            <Badge borderRadius="sm" fontSize="sm" px={2.5} py={1}>
+                                                                {recipient.fullName}
+                                                            </Badge>
+                                                        </Select.Item>
+                                                    ))}
+                                                </Select.Content>
+                                            </Select.Positioner>
+                                        </Select.Root>
                                         <Stack gap={3}>
                                             {file.recipients?.map((recipient, index) => (
                                                 <Card.Root key={index} borderRadius="sm">

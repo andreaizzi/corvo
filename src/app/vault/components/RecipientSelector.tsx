@@ -90,7 +90,7 @@ export function RecipientSelector({
                         _hover={{ borderColor: "fg.muted", cursor: "pointer" }}
                     >
                         <Select.ValueText placeholder="No recipients">
-                            <RecipientBadges recipients={file.recipients} />
+                            <RecipientBadges recipients={file.recipients} slice={2}/>
                         </Select.ValueText>
                     </Select.Trigger>
                     <Select.IndicatorGroup />
@@ -118,10 +118,10 @@ export function RecipientSelector({
     );
 }
 
-function RecipientBadges({ recipients }: { recipients: { fullName: string }[] }) {
+export function RecipientBadges({ recipients, slice, fontSize = "sm" }: { recipients: { fullName: string }[]; slice?: number; fontSize?: string }) {
     if (recipients.length === 0) {
         return (
-            <Badge px={0} py={0} borderRadius="sm" fontSize="sm" bg="transparent">
+            <Badge px={0} py={0} borderRadius="sm" fontSize={fontSize} bg="transparent">
                 No recipients
             </Badge>
         );
@@ -129,14 +129,14 @@ function RecipientBadges({ recipients }: { recipients: { fullName: string }[] })
 
     return (
         <HStack gap="2">
-            {recipients.slice(0, 2).map((recipient, index) => (
-                <Badge key={index} borderRadius="sm" fontSize="sm" px={2.5} py={1}>
+            {recipients.slice(0, slice).map((recipient, index) => (
+                <Badge key={index} borderRadius="sm" fontSize={fontSize} px={2.5} py={1}>
                     {recipient.fullName}
                 </Badge>
             ))}
-            {recipients.length > 2 && (
-                <Badge borderRadius="sm" fontSize="sm" colorPalette="blue">
-                    +{recipients.length - 2}
+            {slice && recipients.length > slice && (
+                <Badge borderRadius="sm" fontSize={fontSize} colorPalette="blue">
+                    +{recipients.length - slice}
                 </Badge>
             )}
         </HStack>

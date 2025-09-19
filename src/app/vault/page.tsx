@@ -133,12 +133,14 @@ export default function VaultPage() {
                 </Stack>
             </Container>
 
-            {selectedFile && (
+            {selectedFile && recipients && (
                 <FileManagementDialog
                     file={selectedFile}
+                    recipients={recipients}
                     downloadingFile={downloadingFile}
                     isOpen={openFileDialog}
-                    handleDownload={() => handleDownloadClick(selectedFile)}
+                    handleDownload={handleDownloadClick}
+                    handleAssign={handleAssign}
                     onCloseAction={handleCloseDialog}
                     refetch={refetch}
                 />
