@@ -94,12 +94,12 @@ export default function FileAssignment({ recipientId }: FileAssignmentProps) {
             // Parse encryption metadata
             // fileIvBase64 non ci serve, perché serirebbe solo per decriptare il file
             // wrapIvBase64 invece ci serve perché è l'IV usato per "wrappare" la chiave del file
-            const [fileIvBase64, wrapIvBase64] = fileData.encryptionIv!.split(":");
+            const [fileIvBase64, wrapIvBase64] = fileData.encryptionIv.split(":");
             const wrapIv = new Uint8Array(base64ToArrayBuffer(wrapIvBase64!));
 
             // unwrap il file usando la chiave dell'utente (derivata dalla password)
             // e otteniamo la fileKey come CryptoKey
-            const wrappedKey = base64ToArrayBuffer(fileData.wrappedKeyUser!);
+            const wrappedKey = base64ToArrayBuffer(fileData.wrappedKeyUser);
             const fileKey = await clientEncryption.unwrapKey(wrappedKey, keyData.key, wrapIv, true);
 
             // Ora che abbiamo la fileKey, dovremmo esportarla in formato raw
