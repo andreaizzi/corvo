@@ -84,7 +84,7 @@ export function useFileUpload({
                 fileType: uploadedFile.type,
                 encryptedData: encryptedBase64,
                 encryptionIv,
-                wrappedKeyUser: wrappedKeyBase64,
+                wrappedFileKey: wrappedKeyBase64,
             });
         } catch (err) {
             console.error("Encryption error:", err);

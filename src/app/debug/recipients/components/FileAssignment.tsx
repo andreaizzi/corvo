@@ -99,7 +99,7 @@ export default function FileAssignment({ recipientId }: FileAssignmentProps) {
 
             // unwrap il file usando la chiave dell'utente (derivata dalla password)
             // e otteniamo la fileKey come CryptoKey
-            const wrappedKey = base64ToArrayBuffer(fileData.wrappedKeyUser);
+            const wrappedKey = base64ToArrayBuffer(fileData.wrappedFileKey);
             const fileKey = await clientEncryption.unwrapKey(wrappedKey, keyData.key, wrapIv, true);
 
             // Ora che abbiamo la fileKey, dovremmo esportarla in formato raw

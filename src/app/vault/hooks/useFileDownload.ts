@@ -26,7 +26,7 @@ export function useFileDownload() {
             const wrapIv = new Uint8Array(base64ToArrayBuffer(wrapIvBase64!));
 
             const { key: userKey } = keyData;
-            const wrappedKey = base64ToArrayBuffer(fileData.wrappedKeyUser);
+            const wrappedKey = base64ToArrayBuffer(fileData.wrappedFileKey);
             const fileKey = await clientEncryption.unwrapKey(wrappedKey, userKey, wrapIv);
 
             const encryptedData = base64ToArrayBuffer(fileData.encryptedData);

@@ -62,7 +62,7 @@ export const vaultRouter = createTRPCRouter({
                 fileType: z.string(),
                 encryptedData: z.string(), // Base64 encoded encrypted file
                 encryptionIv: z.string(),
-                wrappedKeyUser: z.string(),
+                wrappedFileKey: z.string(),
             })
         )
         .mutation(async ({ ctx, input }) => {
@@ -86,7 +86,7 @@ export const vaultRouter = createTRPCRouter({
                     filePath: "", // Will be updated after file is saved
                     encryptionAlgorithm: "AES-256-GCM",
                     encryptionIv: input.encryptionIv,
-                    wrappedKeyUser: input.wrappedKeyUser,
+                    wrappedFileKey: input.wrappedFileKey,
                 })
                 .returning();
 
@@ -142,11 +142,7 @@ export const vaultRouter = createTRPCRouter({
                 with: {
                     recipientFileKeys: {
                         with: {
-                            accessCode: {
-                                with: {
-                                    recipient: true,
-                                },
-                            },
+                            recipient: true,
                         },
                     },
                 },
@@ -156,13 +152,13 @@ export const vaultRouter = createTRPCRouter({
                 ...file,
                 keyDerivationSalt: user?.keyDerivationSalt ?? "",
                 recipients: file.recipientFileKeys.map((fileKey) => ({
-                    id: fileKey.accessCode.recipient.id,
-                    email: fileKey.accessCode.recipient.email,
-                    fullName: fileKey.accessCode.recipient.fullName,
-                    phoneNumber: fileKey.accessCode.recipient.phoneNumber,
-                    relationship: fileKey.accessCode.recipient.relationship,
-                    isActive: fileKey.accessCode.isActive,
-                    activatedAt: fileKey.accessCode.activatedAt,
+                    id: fileKey.recipient.id,
+                    email: fileKey.recipient.email,
+                    fullName: fileKey.recipient.fullName,
+                    phoneNumber: fileKey.recipient.phoneNumber,
+                    relationship: fileKey.recipient.relationship,
+                    isActive: fileKey.recipient.isActive,
+                    activatedAt: fileKey.recipient.activatedAt,
                 })),
             }));
         }),
@@ -202,7 +198,7 @@ export const vaultRouter = createTRPCRouter({
                 fileSize: file.fileSize,
                 fileType: file.fileType,
                 encryptionIv: file.encryptionIv,
-                wrappedKeyUser: file.wrappedKeyUser,
+                wrappedFileKey: file.wrappedFileKey,
                 keyDerivationSalt: file.keyDerivationSalt,
             }; */
 
@@ -255,7 +251,7 @@ export const vaultRouter = createTRPCRouter({
                     fileName: file.fileName,
                     fileType: file.fileType,
                     encryptionIv: file.encryptionIv,
-                    wrappedKeyUser: file.wrappedKeyUser,
+                    wrappedFileKey: file.wrappedFileKey,
                     keyDerivationSalt: user?.keyDerivationSalt ?? ""
                 };
             } catch {

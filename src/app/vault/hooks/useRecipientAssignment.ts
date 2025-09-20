@@ -50,7 +50,7 @@ export function useRecipientAssignment({
         try {
             const [fileIvBase64, wrapIvBase64] = file.encryptionIv.split(":");
             const wrapIv = new Uint8Array(base64ToArrayBuffer(wrapIvBase64!));
-            const wrappedKey = base64ToArrayBuffer(file.wrappedKeyUser);
+            const wrappedKey = base64ToArrayBuffer(file.wrappedFileKey);
             const fileKey = await clientEncryption.unwrapKey(
                 wrappedKey,
                 keyData.key,

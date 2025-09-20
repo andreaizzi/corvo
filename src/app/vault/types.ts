@@ -28,7 +28,7 @@ export interface VaultItem {
     // Encryption fields
     encryptionAlgorithm?: string;
     encryptionIv?: string;
-    wrappedKeyUser?: string;
+    wrappedFileKey?: string;
     keyDerivationSalt?: string;
 
     // Metadata and tracking

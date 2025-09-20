@@ -73,7 +73,7 @@ export default function FileList({ categoryId }: FileListProps) {
             const { key: userKey } = keyData;
 
             // Unwrap the file key
-            const wrappedKey = base64ToArrayBuffer(fileData.wrappedKeyUser);
+            const wrappedKey = base64ToArrayBuffer(fileData.wrappedFileKey);
             const fileKey = await clientEncryption.unwrapKey(wrappedKey, userKey, wrapIv);
 
             // Decrypt the file
