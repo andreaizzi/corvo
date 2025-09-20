@@ -270,7 +270,7 @@ export const vaultItems = createTable(
     // Encryption-specific fields
     encryptionAlgorithm: varchar("encryption_algorithm", { length: 50 }).default("AES-256-GCM"),
     encryptionIv: text("encryption_iv").notNull(),
-    wrappedKeyUser: text("wrapped_key_user").notNull(),
+    wrappedFileKey: text("wrapped_key_user").notNull(),
 
     metadata: jsonb("metadata"),
     isFavorite: boolean("is_favorite").default(false).notNull(),
@@ -327,6 +327,14 @@ export const recipients = createTable(
     phoneNumber: varchar("phone_number", { length: 50 }),
     relationship: varchar("relationship", { length: 100 }),
     notes: text("notes"),
+
+    // Access code fields (merged from recipient_access_codes)
+    accessCodeEncrypted: text("access_code_encrypted").notNull(),
+    encryptionIv: text("encryption_iv").notNull(),
+    codeSalt: text("code_salt").notNull(), // Salt for recipient key derivation
+    isActive: boolean("is_active").default(false),
+    activatedAt: timestamp("activated_at", { withTimezone: true }),
+
     createdAt: timestamp("created_at", { withTimezone: true })
       .default(sql`CURRENT_TIMESTAMP`)
       .notNull(),
@@ -341,43 +349,15 @@ export const recipients = createTable(
   ]
 );
 
-// Recipient access codes - one per recipient
-export const recipientAccessCodes = createTable(
-  "recipient_access_codes",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    recipientId: uuid("recipient_id")
-      .unique()
-      .notNull()
-      .references(() => recipients.id, { onDelete: "cascade" }),
-
-    // Access code encrypted with system master key
-    accessCodeEncrypted: text("access_code_encrypted").notNull(),
-    encryptionIv: text("encryption_iv").notNull(),
-    codeSalt: text("code_salt").notNull(), // Salt for recipient key derivation
-
-    // Activation
-    isActive: boolean("is_active").default(false),
-    activatedAt: timestamp("activated_at", { withTimezone: true }),
-
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .default(sql`CURRENT_TIMESTAMP`)
-      .notNull(),
-  },
-  (t) => [
-    index("idx_recipient_access_codes_recipient").on(t.recipientId),
-    index("idx_recipient_access_codes_active").on(t.isActive),
-  ]
-);
 
 // Recipient file keys - file keys encrypted with recipient's key
 export const recipientFileKeys = createTable(
   "recipient_file_keys",
   {
     id: uuid("id").defaultRandom().primaryKey(),
-    accessCodeId: uuid("access_code_id")
+    recipientId: uuid("recipient_id")
       .notNull()
-      .references(() => recipientAccessCodes.id, { onDelete: "cascade" }),
+      .references(() => recipients.id, { onDelete: "cascade" }),
     vaultItemId: uuid("vault_item_id")
       .notNull()
       .references(() => vaultItems.id, { onDelete: "cascade" }),
@@ -391,8 +371,8 @@ export const recipientFileKeys = createTable(
       .notNull(),
   },
   (t) => [
-    uniqueIndex("idx_recipient_file_keys_unique").on(t.accessCodeId, t.vaultItemId),
-    index("idx_recipient_file_keys_access_code").on(t.accessCodeId),
+    uniqueIndex("idx_recipient_file_keys_unique").on(t.recipientId, t.vaultItemId),
+    index("idx_recipient_file_keys_recipient").on(t.recipientId),
     index("idx_recipient_file_keys_vault_item").on(t.vaultItemId),
   ]
 );
@@ -402,9 +382,9 @@ export const recipientAccessLogs = createTable(
   "recipient_access_logs",
   {
     id: uuid("id").defaultRandom().primaryKey(),
-    accessCodeId: uuid("access_code_id")
+    recipientId: uuid("recipient_id")
       .notNull()
-      .references(() => recipientAccessCodes.id, { onDelete: "cascade" }),
+      .references(() => recipients.id, { onDelete: "cascade" }),
     vaultItemId: uuid("vault_item_id")
       .notNull()
       .references(() => vaultItems.id, { onDelete: "cascade" }),
@@ -418,7 +398,7 @@ export const recipientAccessLogs = createTable(
       .notNull(),
   },
   (t) => [
-    index("idx_recipient_access_logs_access_code").on(t.accessCodeId),
+    index("idx_recipient_access_logs_recipient").on(t.recipientId),
     index("idx_recipient_access_logs_vault_item").on(t.vaultItemId),
     index("idx_recipient_access_logs_created").on(t.createdAt),
   ]
@@ -536,19 +516,10 @@ export const vaultItemTagsRelations = relations(vaultItemTags, ({ one }) => ({
 }));
 
 // Recipients relations
-export const recipientsRelations = relations(recipients, ({ one }) => ({
+export const recipientsRelations = relations(recipients, ({ one, many }) => ({
   user: one(users, {
     fields: [recipients.userId],
     references: [users.id],
-  }),
-  accessCode: one(recipientAccessCodes),
-}));
-
-// Recipient access codes relations
-export const recipientAccessCodesRelations = relations(recipientAccessCodes, ({ one, many }) => ({
-  recipient: one(recipients, {
-    fields: [recipientAccessCodes.recipientId],
-    references: [recipients.id],
   }),
   recipientFileKeys: many(recipientFileKeys),
   accessLogs: many(recipientAccessLogs),
@@ -556,9 +527,9 @@ export const recipientAccessCodesRelations = relations(recipientAccessCodes, ({ 
 
 // Recipient file keys relations
 export const recipientFileKeysRelations = relations(recipientFileKeys, ({ one }) => ({
-  accessCode: one(recipientAccessCodes, {
-    fields: [recipientFileKeys.accessCodeId],
-    references: [recipientAccessCodes.id],
+  recipient: one(recipients, {
+    fields: [recipientFileKeys.recipientId],
+    references: [recipients.id],
   }),
   vaultItem: one(vaultItems, {
     fields: [recipientFileKeys.vaultItemId],
@@ -568,9 +539,9 @@ export const recipientFileKeysRelations = relations(recipientFileKeys, ({ one })
 
 // Recipient access logs relations
 export const recipientAccessLogsRelations = relations(recipientAccessLogs, ({ one }) => ({
-  accessCode: one(recipientAccessCodes, {
-    fields: [recipientAccessLogs.accessCodeId],
-    references: [recipientAccessCodes.id],
+  recipient: one(recipients, {
+    fields: [recipientAccessLogs.recipientId],
+    references: [recipients.id],
   }),
   vaultItem: one(vaultItems, {
     fields: [recipientAccessLogs.vaultItemId],

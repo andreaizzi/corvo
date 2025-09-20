@@ -1,1 +1,0 @@
-ALTER TABLE "corvo_vault_items" DROP COLUMN "key_derivation_salt";
