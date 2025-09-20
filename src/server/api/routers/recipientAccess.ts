@@ -7,7 +7,6 @@ import {
 } from "~/lib/encryption/recipientEncryption";
 import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
 import {
-    recipientAccessCodes,
     recipientAccessLogs,
     recipientFileKeys,
     recipients
@@ -25,13 +24,10 @@ export const recipientAccessRouter = createTRPCRouter({
         .mutation(async ({ ctx, input }) => {
             // Find recipient by email
             const recipient = await ctx.db.query.recipients.findFirst({
-                where: eq(recipients.email, input.email),
-                with: {
-                    accessCode: true,
-                },
+                where: eq(recipients.email, input.email)
             });
 
-            if (!recipient?.accessCode) {
+            if (!recipient?.accessCodeEncrypted) {
                 throw new TRPCError({
                     code: "NOT_FOUND",
                     message: "Invalid email or access code",
@@ -39,7 +35,7 @@ export const recipientAccessRouter = createTRPCRouter({
             }
 
             // Check if access code is active
-            if (!recipient.accessCode.isActive) {
+            if (!recipient.isActive) {
                 throw new TRPCError({
                     code: "FORBIDDEN",
                     message: "Access not yet granted. The legacy has not been activated.",
@@ -48,8 +44,8 @@ export const recipientAccessRouter = createTRPCRouter({
 
             // Decrypt the stored access code
             const storedAccessCode = await decryptAccessCode({
-                encrypted: recipient.accessCode.accessCodeEncrypted,
-                iv: recipient.accessCode.encryptionIv,
+                encrypted: recipient.accessCodeEncrypted,
+                iv: recipient.encryptionIv,
             });
 
             // Compare access codes
@@ -65,9 +61,8 @@ export const recipientAccessRouter = createTRPCRouter({
                 recipientId: recipient.id,
                 recipientName: recipient.fullName,
                 recipientEmail: recipient.email,
-                activatedAt: recipient.accessCode.activatedAt,
-                codeSalt: recipient.accessCode.codeSalt,
-                accessCodeId: recipient.accessCode.id,
+                activatedAt: recipient.activatedAt,
+                codeSalt: recipient.codeSalt,
             };
         }),
 
@@ -76,16 +71,14 @@ export const recipientAccessRouter = createTRPCRouter({
         .input(
             z.object({
                 recipientId: z.string().uuid(),
-                accessCodeId: z.string().uuid(),
             })
         )
         .query(async ({ ctx, input }) => {
-            // Verify the recipient and access code match
-            const accessCode = await ctx.db.query.recipientAccessCodes.findFirst({
+            // Verify the recipient is active
+            const recipient = await ctx.db.query.recipients.findFirst({
                 where: and(
-                    eq(recipientAccessCodes.id, input.accessCodeId),
-                    eq(recipientAccessCodes.recipientId, input.recipientId),
-                    eq(recipientAccessCodes.isActive, true)
+                    eq(recipients.id, input.recipientId),
+                    eq(recipients.isActive, true)
                 ),
                 with: {
                     recipientFileKeys: {
@@ -96,7 +89,7 @@ export const recipientAccessRouter = createTRPCRouter({
                 },
             });
 
-            if (!accessCode) {
+            if (!recipient) {
                 throw new TRPCError({
                     code: "UNAUTHORIZED",
                     message: "Invalid session",
@@ -104,7 +97,7 @@ export const recipientAccessRouter = createTRPCRouter({
             }
 
             // Return file list
-            const files = accessCode.recipientFileKeys
+            const files = recipient.recipientFileKeys
                 .filter(rfk => rfk.vaultItem && !rfk.vaultItem.deletedAt)
                 .map(rfk => ({
                     id: rfk.vaultItem.id,
@@ -123,7 +116,6 @@ export const recipientAccessRouter = createTRPCRouter({
         .input(
             z.object({
                 recipientId: z.string().uuid(),
-                accessCodeId: z.string().uuid(),
                 fileId: z.string().uuid(),
             })
         )
@@ -131,20 +123,16 @@ export const recipientAccessRouter = createTRPCRouter({
             // Verify access
             const fileKey = await ctx.db.query.recipientFileKeys.findFirst({
                 where: and(
-                    eq(recipientFileKeys.accessCodeId, input.accessCodeId),
+                    eq(recipientFileKeys.recipientId, input.recipientId),
                     eq(recipientFileKeys.vaultItemId, input.fileId)
                 ),
                 with: {
                     vaultItem: true,
-                    accessCode: {
-                        with: {
-                            recipient: true,
-                        },
-                    },
+                    recipient: true
                 },
             });
 
-            if (!fileKey || fileKey.accessCode.recipientId !== input.recipientId) {
+            if (!fileKey) {
                 throw new TRPCError({
                     code: "UNAUTHORIZED",
                     message: "Access denied",
@@ -161,12 +149,11 @@ export const recipientAccessRouter = createTRPCRouter({
 
             // Log access
             await ctx.db.insert(recipientAccessLogs).values({
-                accessCodeId: input.accessCodeId,
+                recipientId: input.recipientId,
                 vaultItemId: input.fileId,
                 accessType: "download",
                 ipAddress: ctx.headers.get("x-forwarded-for") ?? "unknown",
                 userAgent: ctx.headers.get("user-agent") ?? "unknown",
-                accessGranted: true,
             });
 
             // Read encrypted file

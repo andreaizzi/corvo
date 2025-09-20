@@ -1,15 +1,12 @@
 import { TRPCError } from "@trpc/server";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { z } from "zod";
+import { sendRecipientNotificationEmail } from "~/lib/email/recipientNotification";
+import { decryptAccessCode } from "~/lib/encryption/recipientEncryption";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import {
-    recipients,
-    recipientAccessCodes,
-    recipientFileKeys,
-    users,
+    recipients
 } from "~/server/db/schema";
-import { decryptAccessCode } from "~/lib/encryption/recipientEncryption";
-import { sendRecipientNotificationEmail } from "~/lib/email/recipientNotification";
 
 export const triggerRouter = createTRPCRouter({
     // Manually activate trigger for a user (for testing/admin purposes)
@@ -35,11 +32,7 @@ export const triggerRouter = createTRPCRouter({
             const userRecipients = await ctx.db.query.recipients.findMany({
                 where: eq(recipients.userId, targetUserId),
                 with: {
-                    accessCode: {
-                        with: {
-                            recipientFileKeys: true,
-                        },
-                    },
+                    recipientFileKeys: true,
                 },
             });
 
@@ -54,7 +47,7 @@ export const triggerRouter = createTRPCRouter({
 
             // Process each recipient
             for (const recipient of userRecipients) {
-                if (!recipient.accessCode) {
+                if (!recipient.accessCodeEncrypted) {
                     activationResults.push({
                         recipientId: recipient.id,
                         recipientName: recipient.fullName,
@@ -65,7 +58,8 @@ export const triggerRouter = createTRPCRouter({
                 }
 
                 // Skip if already activated
-                if (recipient.accessCode.isActive) {
+                // TODO: Redefine isActive meaning and logic
+                if (recipient.isActive) {
                     activationResults.push({
                         recipientId: recipient.id,
                         recipientName: recipient.fullName,
@@ -76,7 +70,7 @@ export const triggerRouter = createTRPCRouter({
                 }
 
                 // Check if recipient has any files assigned
-                if (recipient.accessCode.recipientFileKeys.length === 0) {
+                if (recipient.recipientFileKeys.length === 0) {
                     activationResults.push({
                         recipientId: recipient.id,
                         recipientName: recipient.fullName,
@@ -89,18 +83,19 @@ export const triggerRouter = createTRPCRouter({
                 try {
                     // Decrypt access code
                     const accessCode = await decryptAccessCode({
-                        encrypted: recipient.accessCode.accessCodeEncrypted,
-                        iv: recipient.accessCode.encryptionIv,
+                        encrypted: recipient.accessCodeEncrypted,
+                        iv: recipient.encryptionIv,
                     });
+
 
                     // Activate the access code
                     await ctx.db
-                        .update(recipientAccessCodes)
+                        .update(recipients)
                         .set({
                             isActive: true,
                             activatedAt: new Date(),
                         })
-                        .where(eq(recipientAccessCodes.id, recipient.accessCode.id));
+                        .where(eq(recipients.id, recipient.id));
 
                     // Send notification email (unless in test mode)
                     if (!input.testMode) {
@@ -108,7 +103,7 @@ export const triggerRouter = createTRPCRouter({
                             recipientEmail: recipient.email,
                             recipientName: recipient.fullName,
                             accessCode,
-                            fileCount: recipient.accessCode.recipientFileKeys.length,
+                            fileCount: recipient.recipientFileKeys.length,
                         });
                     }
 
@@ -147,35 +142,23 @@ export const triggerRouter = createTRPCRouter({
         const userRecipients = await ctx.db.query.recipients.findMany({
             where: eq(recipients.userId, userId),
             with: {
-                accessCode: {
-                    with: {
-                        recipientFileKeys: true,
-                    },
-                },
+                recipientFileKeys: true,
             },
         });
 
-        const totalRecipients = userRecipients.length;
-        const recipientsWithAccessCodes = userRecipients.filter(r => r.accessCode).length;
-        const activatedRecipients = userRecipients.filter(r => r.accessCode?.isActive).length;
-        const recipientsWithFiles = userRecipients.filter(
-            r => r.accessCode && r.accessCode.recipientFileKeys.length > 0
-        ).length;
-
         return {
-            totalRecipients,
-            recipientsWithAccessCodes,
-            activatedRecipients,
-            recipientsWithFiles,
-            readyForActivation: recipientsWithFiles > 0 && activatedRecipients === 0,
+            userId,
+            totalRecipients: userRecipients.length,
+            activeRecipients: userRecipients.filter(r => r.isActive).length,
+            readyForActivation: true, // TODO: Implement?
             recipients: userRecipients.map(r => ({
                 id: r.id,
-                name: r.fullName,
+                fullName: r.fullName,
                 email: r.email,
-                hasAccessCode: !!r.accessCode,
-                isActive: r.accessCode?.isActive ?? false,
-                activatedAt: r.accessCode?.activatedAt,
-                fileCount: r.accessCode?.recipientFileKeys.length ?? 0,
+                hasAccessCode: !!r.accessCodeEncrypted,
+                isActive: r.isActive ?? false,
+                activatedAt: r.activatedAt,
+                fileCount: r.recipientFileKeys.length ?? 0,
             })),
         };
     }),
@@ -184,39 +167,23 @@ export const triggerRouter = createTRPCRouter({
     deactivateAllTriggers: protectedProcedure.mutation(async ({ ctx }) => {
         const userId = ctx.session.user.id;
 
-        // Get all recipient access codes for this user
-        const userRecipients = await ctx.db.query.recipients.findMany({
-            where: eq(recipients.userId, userId),
-            with: {
-                accessCode: true,
-            },
-        });
-
-        const accessCodeIds = userRecipients
-            .filter(r => r.accessCode?.isActive)
-            .map(r => r.accessCode!.id);
-
-        if (accessCodeIds.length === 0) {
-            return { success: true, deactivatedCount: 0 };
-        }
-
-        // Deactivate all access codes
-        await ctx.db
-            .update(recipientAccessCodes)
+        // Deactivate all active recipients for this user in one query
+        const result = await ctx.db
+            .update(recipients)
             .set({
                 isActive: false,
                 activatedAt: null,
             })
             .where(
                 and(
-                    eq(recipientAccessCodes.isActive, true),
-                    inArray(recipientAccessCodes.id, accessCodeIds)
+                    eq(recipients.userId, userId),
+                    eq(recipients.isActive, true)
                 )
             );
 
         return {
             success: true,
-            deactivatedCount: accessCodeIds.length,
+            deactivatedCount: result.entries.length ?? 0,
         };
     }),
 });

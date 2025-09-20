@@ -4,7 +4,6 @@ import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import {
     recipients,
-    recipientAccessCodes,
     recipientFileKeys,
     vaultItems
 } from "~/server/db/schema";
@@ -19,7 +18,6 @@ import {
     base64ToArrayBuffer,
     generateRandomBytes,
     arrayBufferToBase64,
-    clientEncryption
 } from "~/lib/encryption/encryption";
 
 export const recipientsRouter = createTRPCRouter({
@@ -52,12 +50,24 @@ export const recipientsRouter = createTRPCRouter({
                 });
             }
 
+            // Generate and encrypt access code
+            const accessCode = generateAccessCode();
+            console.log("Generated access code:", accessCode);
+            const recipientSalt = generateRandomBytes(16);
+
+            // Encrypt access code with system master key
+            const { encrypted, iv } = await encryptAccessCode(accessCode);
+
             // Create recipient
             const [recipient] = await ctx.db
                 .insert(recipients)
                 .values({
                     userId,
                     ...input,
+                    accessCodeEncrypted: encrypted,
+                    encryptionIv: iv,
+                    codeSalt: arrayBufferToBase64(recipientSalt.buffer as ArrayBuffer),
+                    isActive: false,
                 })
                 .returning();
 
@@ -68,23 +78,6 @@ export const recipientsRouter = createTRPCRouter({
                 });
             }
 
-            // Generate and encrypt access code
-            const accessCode = generateAccessCode();
-            console.log("Generated access code:", accessCode);
-            const recipientSalt = generateRandomBytes(16);
-
-            // Encrypt access code with system master key
-            const { encrypted, iv } = await encryptAccessCode(accessCode);
-
-            // Store encrypted access code
-            await ctx.db.insert(recipientAccessCodes).values({
-                recipientId: recipient.id,
-                accessCodeEncrypted: encrypted,
-                encryptionIv: iv,
-                codeSalt: arrayBufferToBase64(recipientSalt.buffer),
-                isActive: false,
-            });
-
             return recipient;
         }),
 
@@ -94,21 +87,18 @@ export const recipientsRouter = createTRPCRouter({
 
         const userRecipients = await ctx.db.query.recipients.findMany({
             where: eq(recipients.userId, userId),
-            with: {
-                accessCode: true,
-            },
             orderBy: (recipients, { asc }) => [asc(recipients.fullName)],
         });
 
         // Count assigned files for each recipient
         const recipientsWithCounts = await Promise.all(
             userRecipients.map(async (recipient) => {
-                if (!recipient.accessCode) {
+                if (!recipient.accessCodeEncrypted) {
                     return { ...recipient, assignedFilesCount: 0 };
                 }
 
                 const fileKeys = await ctx.db.query.recipientFileKeys.findMany({
-                    where: eq(recipientFileKeys.accessCodeId, recipient.accessCode.id),
+                    where: eq(recipientFileKeys.recipientId, recipient.id),
                 });
 
                 return {
@@ -133,13 +123,9 @@ export const recipientsRouter = createTRPCRouter({
                     eq(recipients.userId, userId)
                 ),
                 with: {
-                    accessCode: {
+                    recipientFileKeys: {
                         with: {
-                            recipientFileKeys: {
-                                with: {
-                                    vaultItem: true,
-                                },
-                            },
+                            vaultItem: true,
                         },
                     },
                 },
@@ -224,113 +210,113 @@ export const recipientsRouter = createTRPCRouter({
         }),
 
     // Assign file to recipient
-/*     assignFile: protectedProcedure
-        .input(
-            z.object({
-                recipientId: z.string().uuid(),
-                fileId: z.string().uuid(),
-                userPassword: z.string(), // Need user password to decrypt file key
-            })
-        )
-        .mutation(async ({ ctx, input }) => {
-            const userId = ctx.session.user.id;
-
-            // Verify recipient ownership
-            const recipient = await ctx.db.query.recipients.findFirst({
-                where: and(
-                    eq(recipients.id, input.recipientId),
-                    eq(recipients.userId, userId)
-                ),
-                with: {
-                    accessCode: true,
-                },
-            });
-
-            if (!recipient) {
-                throw new TRPCError({
-                    code: "NOT_FOUND",
-                    message: "Recipient not found",
+    /*     assignFile: protectedProcedure
+            .input(
+                z.object({
+                    recipientId: z.string().uuid(),
+                    fileId: z.string().uuid(),
+                    userPassword: z.string(), // Need user password to decrypt file key
+                })
+            )
+            .mutation(async ({ ctx, input }) => {
+                const userId = ctx.session.user.id;
+    
+                // Verify recipient ownership
+                const recipient = await ctx.db.query.recipients.findFirst({
+                    where: and(
+                        eq(recipients.id, input.recipientId),
+                        eq(recipients.userId, userId)
+                    ),
+                    with: {
+                        accessCode: true,
+                    },
                 });
-            }
-
-            // Verify file ownership
-            const file = await ctx.db.query.vaultItems.findFirst({
-                where: and(
-                    eq(vaultItems.id, input.fileId),
-                    eq(vaultItems.userId, userId),
-                    eq(vaultItems.itemType, "file"),
-                    isNull(vaultItems.deletedAt)
-                ),
-            });
-
-            if (!file) {
-                throw new TRPCError({
-                    code: "NOT_FOUND",
-                    message: "File not found",
+    
+                if (!recipient) {
+                    throw new TRPCError({
+                        code: "NOT_FOUND",
+                        message: "Recipient not found",
+                    });
+                }
+    
+                // Verify file ownership
+                const file = await ctx.db.query.vaultItems.findFirst({
+                    where: and(
+                        eq(vaultItems.id, input.fileId),
+                        eq(vaultItems.userId, userId),
+                        eq(vaultItems.itemType, "file"),
+                        isNull(vaultItems.deletedAt)
+                    ),
                 });
-            }
-
-            // Ensure recipient has access code
-            if (!recipient.accessCode) {
-                throw new TRPCError({
-                    code: "INTERNAL_SERVER_ERROR",
-                    message: "Recipient access code not found",
+    
+                if (!file) {
+                    throw new TRPCError({
+                        code: "NOT_FOUND",
+                        message: "File not found",
+                    });
+                }
+    
+                // Ensure recipient has access code
+                if (!recipient.accessCode) {
+                    throw new TRPCError({
+                        code: "INTERNAL_SERVER_ERROR",
+                        message: "Recipient access code not found",
+                    });
+                }
+    
+                // Check if file already assigned
+                const existing = await ctx.db.query.recipientFileKeys.findFirst({
+                    where: and(
+                        eq(recipientFileKeys.accessCodeId, recipient.accessCode.id),
+                        eq(recipientFileKeys.vaultItemId, input.fileId)
+                    ),
                 });
-            }
-
-            // Check if file already assigned
-            const existing = await ctx.db.query.recipientFileKeys.findFirst({
-                where: and(
-                    eq(recipientFileKeys.accessCodeId, recipient.accessCode.id),
-                    eq(recipientFileKeys.vaultItemId, input.fileId)
-                ),
-            });
-
-            if (existing) {
-                throw new TRPCError({
-                    code: "CONFLICT",
-                    message: "File already assigned to this recipient",
+    
+                if (existing) {
+                    throw new TRPCError({
+                        code: "CONFLICT",
+                        message: "File already assigned to this recipient",
+                    });
+                }
+    
+                // Get recipient's access code
+                const accessCode = await decryptAccessCode({
+                    encrypted: recipient.accessCode.accessCodeEncrypted,
+                    iv: recipient.accessCode.encryptionIv,
                 });
-            }
-
-            // Get recipient's access code
-            const accessCode = await decryptAccessCode({
-                encrypted: recipient.accessCode.accessCodeEncrypted,
-                iv: recipient.accessCode.encryptionIv,
-            });
-
-            // Derive recipient key
-            const recipientSalt = new Uint8Array(
-                base64ToArrayBuffer(recipient.accessCode.codeSalt)
-            );
-            const recipientKey = await deriveRecipientKey(accessCode, recipientSalt);
-
-            // Parse file encryption metadata
-            if (!file.encryptionIv || !file.wrappedKeyUser || !file.keyDerivationSalt) {
+    
+                // Derive recipient key
+                const recipientSalt = new Uint8Array(
+                    base64ToArrayBuffer(recipient.accessCode.codeSalt)
+                );
+                const recipientKey = await deriveRecipientKey(accessCode, recipientSalt);
+    
+                // Parse file encryption metadata
+                if (!file.encryptionIv || !file.wrappedFileKey || !file.keyDerivationSalt) {
+                    throw new TRPCError({
+                        code: "INTERNAL_SERVER_ERROR",
+                        message: "File encryption metadata missing",
+                    });
+                }
+    
+                const [fileIvBase64, wrapIvBase64] = file.encryptionIv.split(":");
+                const wrapIv = new Uint8Array(base64ToArrayBuffer(wrapIvBase64));
+    
+                // Note: In production, you'd verify the user's password and derive their key
+                // For now, we'll assume the client has already provided the unwrapped file key
+                // This is a simplification - in reality, you'd need to handle this more securely
+    
+                // Generate new IV for recipient wrapping
+                const recipientWrapIv = generateRandomBytes(12);
+    
+                // For this implementation, we'll need the client to send the file key
+                // In a production system, you might handle this differently
                 throw new TRPCError({
-                    code: "INTERNAL_SERVER_ERROR",
-                    message: "File encryption metadata missing",
+                    code: "NOT_IMPLEMENTED",
+                    message: "File assignment requires client-side key unwrapping. Use assignFileWithKey instead.",
                 });
-            }
-
-            const [fileIvBase64, wrapIvBase64] = file.encryptionIv.split(":");
-            const wrapIv = new Uint8Array(base64ToArrayBuffer(wrapIvBase64));
-
-            // Note: In production, you'd verify the user's password and derive their key
-            // For now, we'll assume the client has already provided the unwrapped file key
-            // This is a simplification - in reality, you'd need to handle this more securely
-
-            // Generate new IV for recipient wrapping
-            const recipientWrapIv = generateRandomBytes(12);
-
-            // For this implementation, we'll need the client to send the file key
-            // In a production system, you might handle this differently
-            throw new TRPCError({
-                code: "NOT_IMPLEMENTED",
-                message: "File assignment requires client-side key unwrapping. Use assignFileWithKey instead.",
-            });
-        }),
- */
+            }),
+     */
     // Assign file with already unwrapped key (called from client after unwrapping)
     assignFileWithKey: protectedProcedure
         .input(
@@ -348,13 +334,10 @@ export const recipientsRouter = createTRPCRouter({
                 where: and(
                     eq(recipients.id, input.recipientId),
                     eq(recipients.userId, userId)
-                ),
-                with: {
-                    accessCode: true,
-                },
+                )
             });
 
-            if (!recipient?.accessCode) {
+            if (!recipient?.accessCodeEncrypted) {
                 throw new TRPCError({
                     code: "NOT_FOUND",
                     message: "Recipient or access code not found",
@@ -380,7 +363,7 @@ export const recipientsRouter = createTRPCRouter({
             // Check if already assigned
             const existing = await ctx.db.query.recipientFileKeys.findFirst({
                 where: and(
-                    eq(recipientFileKeys.accessCodeId, recipient.accessCode.id),
+                    eq(recipientFileKeys.recipientId, recipient.id),
                     eq(recipientFileKeys.vaultItemId, input.fileId)
                 ),
             });
@@ -401,13 +384,13 @@ export const recipientsRouter = createTRPCRouter({
 
             // Get recipient's access code
             const accessCode = await decryptAccessCode({
-                encrypted: recipient.accessCode.accessCodeEncrypted,
-                iv: recipient.accessCode.encryptionIv,
+                encrypted: recipient.accessCodeEncrypted,
+                iv: recipient.encryptionIv,
             });
 
             // Derive recipient key
             const recipientSalt = new Uint8Array(
-                base64ToArrayBuffer(recipient.accessCode.codeSalt)
+                base64ToArrayBuffer(recipient.codeSalt)
             );
             const recipientKey = await deriveRecipientKey(accessCode, recipientSalt);
 
@@ -421,10 +404,10 @@ export const recipientsRouter = createTRPCRouter({
 
             // Store encrypted file key
             await ctx.db.insert(recipientFileKeys).values({
-                accessCodeId: recipient.accessCode.id,
+                recipientId: recipient.id,
                 vaultItemId: input.fileId,
                 encryptedFileKey: arrayBufferToBase64(wrappedFileKey),
-                encryptionIv: arrayBufferToBase64(recipientWrapIv.buffer),
+                encryptionIv: arrayBufferToBase64(recipientWrapIv.buffer as ArrayBuffer),
             });
 
             return { success: true, alreadyAssigned: false };
@@ -446,13 +429,10 @@ export const recipientsRouter = createTRPCRouter({
                 where: and(
                     eq(recipients.id, input.recipientId),
                     eq(recipients.userId, userId)
-                ),
-                with: {
-                    accessCode: true,
-                },
+                )
             });
 
-            if (!recipient?.accessCode) {
+            if (!recipient?.accessCodeEncrypted) {
                 throw new TRPCError({
                     code: "NOT_FOUND",
                     message: "Recipient not found",
@@ -464,7 +444,7 @@ export const recipientsRouter = createTRPCRouter({
                 .delete(recipientFileKeys)
                 .where(
                     and(
-                        eq(recipientFileKeys.accessCodeId, recipient.accessCode.id),
+                        eq(recipientFileKeys.recipientId, recipient.id),
                         eq(recipientFileKeys.vaultItemId, input.fileId)
                     )
                 );
@@ -485,31 +465,27 @@ export const recipientsRouter = createTRPCRouter({
                     eq(recipients.userId, userId)
                 ),
                 with: {
-                    accessCode: {
+                    recipientFileKeys: {
                         with: {
-                            recipientFileKeys: {
-                                with: {
-                                    vaultItem: true,
-                                },
-                            },
+                            vaultItem: true,
                         },
                     },
                 },
             });
 
-            if (!recipient?.accessCode) {
+            if (!recipient?.accessCodeEncrypted) {
                 return [];
             }
 
-            return recipient.accessCode.recipientFileKeys
+            return recipient.recipientFileKeys
                 .filter(rfk => rfk.vaultItem && !rfk.vaultItem.deletedAt)
                 .map(rfk => ({
-                    id: rfk.vaultItem!.id,
-                    title: rfk.vaultItem!.title,
-                    fileName: rfk.vaultItem!.fileName,
-                    fileSize: rfk.vaultItem!.fileSize,
-                    fileType: rfk.vaultItem!.fileType,
-                    createdAt: rfk.vaultItem!.createdAt,
+                    id: rfk.vaultItem.id,
+                    title: rfk.vaultItem.title,
+                    fileName: rfk.vaultItem.fileName,
+                    fileSize: rfk.vaultItem.fileSize,
+                    fileType: rfk.vaultItem.fileType,
+                    createdAt: rfk.vaultItem.createdAt,
                     assignedAt: rfk.createdAt,
                 }));
         }),

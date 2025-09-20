@@ -60,7 +60,7 @@ export const authRouter = createTRPCRouter({
         const user = await ctx.db.query.users.findFirst({
             where: (users, { eq }) => eq(users.id, ctx.session.user.id),
             with: {
-                userPreferences: true,
+                // userPreferences: true,
                 // checkInConfig: true,
             },
         });
@@ -83,7 +83,7 @@ export const authRouter = createTRPCRouter({
             isActive: user.isActive,
             createdAt: user.createdAt,
             lastLoginAt: user.lastLoginAt,
-            preferences: user.userPreferences,
+            // preferences: user.userPreferences,
             // checkInConfig: user.checkInConfig,
         };
     }),
