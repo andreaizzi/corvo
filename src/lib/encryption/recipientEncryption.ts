@@ -32,7 +32,7 @@ export function generateAccessCode(): string {
     // Generate 4 random words
     for (let i = 0; i < 4; i++) {
         const randomIndex = Math.floor(Math.random() * WORD_LIST.length);
-        words.push(WORD_LIST[randomIndex]);
+        words.push(WORD_LIST[randomIndex]!);
     }
 
     return words.join('-');
