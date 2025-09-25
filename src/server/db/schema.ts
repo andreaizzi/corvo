@@ -1,4 +1,4 @@
-import { sql, relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import {
   bigint,
   boolean,
@@ -403,6 +403,67 @@ export const recipientAccessLogs = createTable(
     index("idx_recipient_access_logs_created").on(t.createdAt),
   ]
 );
+
+
+// =====================================================
+// DEAD MAN SWITCH
+// =====================================================
+export const notificationChannels = createTable(
+  "notification_channels",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    channelType: varchar("channel_type", { length: 50 }).notNull(), // e.g., 'email', 'sms', 'telegram'
+    channelMode: varchar("channel_mode", { length: 50 }).default("manual"), // e.g., 'manual', 'automatic'
+    channelConfig: jsonb("channel_config").notNull(),
+    isActive: boolean("is_active").default(true),
+    isVerified: boolean("is_verified").default(true), // TODO: Implement verification process
+    verifiedAt: timestamp("verified_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .default(sql`CURRENT_TIMESTAMP`)
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .default(sql`CURRENT_TIMESTAMP`)
+      .notNull()
+  }
+);
+
+export const checkInConfigs = createTable(
+  "check_in_configs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    cronExpression: varchar("cron_expression", { length: 50 }).notNull(),
+    gracePeriodDays: integer("grace_period_days").default(3).notNull(),
+    maxMissedCheckIns: integer("max_missed_check_ins").default(3).notNull(),
+    vacationMode: boolean("vacation_mode").default(false).notNull(),
+    vacationEndDate: timestamp("vacation_end_date", { withTimezone: true }),
+    isActive: boolean("is_active").default(true).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .default(sql`CURRENT_TIMESTAMP`)
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .default(sql`CURRENT_TIMESTAMP`)
+      .notNull()
+  }
+);
+
+export const checkInEvents = createTable(
+  "check_in_events",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    status: varchar("status", { length: 50 }).notNull(), // e.g., 'pending', 'completed', 'missed'
+    confirmationChannel: uuid("confirmation_channel_id").references(() => notificationChannels.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .default(sql`CURRENT_TIMESTAMP`)
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .default(sql`CURRENT_TIMESTAMP`)
+      .notNull()
+  }
+);
+
 
 // =====================================================
 // RELATIONS
